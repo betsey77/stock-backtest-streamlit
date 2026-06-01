@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
-import efinance as ef
 import yfinance as yf
 import io
 import base64
@@ -914,35 +913,7 @@ def get_stock_data(stock_code, start_date, end_date):
         except Exception as e:
             st.write(f"✗ TickFlow 获取数据时出错: {str(e)[:100]}...")
         
-        # 如果是美股，跳过efinance（只支持A股）
-        if not (stock_code.startswith('6') or stock_code.startswith('5') or 
-                stock_code.startswith('0') or stock_code.startswith('3') or
-                stock_code.startswith('8') or stock_code.startswith('4')):
-            st.write("检测到非A股代码，跳过efinance")
-        else:
-            # 尝试使用efinance获取数据
-            try:
-                def fetch_efinance():
-                    return ef.stock.get_quote_history(stock_code)
-                
-                data = retry_with_backoff(fetch_efinance)
-                
-                data['日期'] = pd.to_datetime(data['日期'])
-                data = data[(data['日期'] >= start_date) & (data['日期'] <= end_date)]
-                data.set_index('日期', inplace=True)
-                
-                data.rename(columns={
-                    '收盘': 'close',
-                    '开盘': 'open',
-                    '最高': 'high',
-                    '最低': 'low',
-                    '成交量': 'volume'
-                }, inplace=True)
-                
-                st.write(f"✓ 使用 efinance 获取到 {len(data)} 条数据")
-                return data
-            except Exception as e:
-                st.write(f"✗ efinance 获取数据时出错: {str(e)[:100]}...")
+        st.write("已停用 efinance 数据源，继续尝试 yfinance。")
         
         # 使用yfinance作为备用数据源（禁用缓存以避免权限问题）
         try:
@@ -1031,26 +1002,7 @@ def get_benchmark_data(start_date, end_date):
         except Exception as e:
             st.write(f"✗ TickFlow 获取上证指数时出错: {str(e)[:100]}...")
         
-        # 尝试使用 efinance
-        try:
-            def fetch_efinance():
-                return ef.stock.get_quote_history('000001')
-            
-            data = retry_with_backoff(fetch_efinance)
-            
-            data['日期'] = pd.to_datetime(data['日期'])
-            data = data[(data['日期'] >= start_date) & (data['日期'] <= end_date)]
-            data.set_index('日期', inplace=True)
-            
-            data.rename(columns={'收盘': 'close'}, inplace=True)
-            
-            data['benchmark_return'] = data['close'].pct_change()
-            data['cumulative_benchmark'] = (1 + data['benchmark_return']).cumprod()
-            
-            st.write(f"✓ 使用 efinance 获取到 {len(data)} 条上证指数数据")
-            return data
-        except Exception as e:
-            st.write(f"✗ efinance 获取上证指数数据时出错: {str(e)[:100]}...")
+        st.write("已停用 efinance 上证指数数据源，继续尝试 yfinance。")
         
         # 尝试使用 yfinance
         try:
@@ -1120,22 +1072,7 @@ def get_stock_name(stock_code):
         except Exception as e:
             st.write(f"✗ TickFlow 获取股票名称时出错: {str(e)[:100]}...")
         
-        # 如果是A股，尝试使用 efinance
-        if stock_code.startswith('6') or stock_code.startswith('5') or \
-           stock_code.startswith('0') or stock_code.startswith('3') or \
-           stock_code.startswith('8') or stock_code.startswith('4'):
-            try:
-                def fetch_efinance():
-                    return ef.stock.get_quote_history(stock_code, klt=1)
-                
-                stock_info = retry_with_backoff(fetch_efinance)
-                if not stock_info.empty:
-                    stock_name = stock_info.get('股票名称', [''])[0] if '股票名称' in stock_info.columns else ""
-                    if stock_name:
-                        st.write(f"股票名称: {stock_name}")
-                    return stock_name
-            except Exception as e:
-                st.write(f"✗ efinance 获取股票名称时出错: {str(e)[:100]}...")
+        st.write("已停用 efinance 股票名称数据源。")
         
         # 对于美股，直接返回股票代码作为名称（避免yfinance缓存权限问题）
         if not (stock_code.startswith('6') or stock_code.startswith('5') or 
