@@ -1,0 +1,10 @@
+streamlit
+pandas
+numpy
+matplotlib
+plotly
+efinance
+yfinance
+requests
+urllib3
+tickflow

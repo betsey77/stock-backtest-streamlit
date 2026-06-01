@@ -1,0 +1,10 @@
+.streamlit/secrets.toml
+__pycache__/
+*.py[cod]
+yfinance_cache/
+*.png
+*.html
+.DS_Store
+.venv/
+venv/
+env/
