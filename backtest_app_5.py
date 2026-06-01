@@ -176,6 +176,15 @@ def get_color_scheme():
             'accent': '#007AFF',
         }
 
+def strategy_uses_blocked_dependency(strategy_code):
+    """Detect imports that are unavailable or unsafe on Streamlit Cloud."""
+    blocked_patterns = [
+        'import efinance',
+        'from efinance',
+    ]
+    normalized = strategy_code.lower()
+    return any(pattern in normalized for pattern in blocked_patterns)
+
 # 统一的 Plotly 图表 Apple 风格模板
 def get_plotly_template(colors):
     """返回 Apple 风格 Plotly layout 基础配置"""
@@ -2464,10 +2473,26 @@ def main():
                 for i, uploaded_file in enumerate(uploaded_files):
                     # 读取上传的策略代码
                     strategy_code = uploaded_file.read().decode('utf-8')
+                    if strategy_uses_blocked_dependency(strategy_code):
+                        st.error(
+                            f"策略 {i+1} 包含 efinance 依赖。Streamlit Cloud 环境不支持 efinance，"
+                            "请删除策略文件里的 import efinance / from efinance 后重新上传。"
+                        )
+                        continue
                     # 创建独立的命名空间
                     strategy_namespace = {}
                     # 执行上传的策略代码
-                    exec(strategy_code, strategy_namespace)
+                    try:
+                        exec(strategy_code, strategy_namespace)
+                    except PermissionError as e:
+                        st.error(
+                            f"策略 {i+1} 加载失败：策略代码尝试访问云端不可写目录。"
+                            f"如果策略文件引用 efinance，请删除该依赖后重试。错误摘要：{str(e)[:160]}"
+                        )
+                        continue
+                    except Exception as e:
+                        st.error(f"策略 {i+1} 加载失败：{str(e)[:200]}")
+                        continue
                     # 检查是否包含必要的函数
                     required_functions = ['calculate_indicators', 'implement_strategy', 'calculate_returns', 'calculate_performance_metrics']
                     if all(func in strategy_namespace for func in required_functions):
