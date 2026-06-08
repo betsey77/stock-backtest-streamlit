@@ -1,0 +1,82 @@
+<svg viewBox="0 0 1920 1080" role="img" aria-label="77 multicolor pattern background" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="base" cx="50%" cy="36%" r="82%">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.64" stop-color="#FBFAF7"/>
+      <stop offset="1" stop-color="#EEE8DC"/>
+    </radialGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#5B4315" flood-opacity="0.08"/>
+    </filter>
+    <symbol id="mark77" viewBox="0 0 180 180">
+      <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M36 46H86L45 134" stroke="var(--c1)" stroke-width="18"/>
+        <path d="M91 46H141L100 134" stroke="var(--c2)" stroke-width="18"/>
+        <path d="M36 46H86" stroke="var(--c3)" stroke-width="18"/>
+        <path d="M91 46H141" stroke="var(--c4)" stroke-width="18"/>
+        <path d="M48 116C78 96 106 101 138 70" stroke="#2EA7A0" stroke-width="5"/>
+      </g>
+    </symbol>
+    <symbol id="fourDot" viewBox="0 0 120 120">
+      <circle cx="35" cy="35" r="8" fill="var(--c1)"/>
+      <circle cx="85" cy="35" r="8" fill="var(--c2)"/>
+      <circle cx="85" cy="85" r="8" fill="var(--c3)"/>
+      <circle cx="35" cy="85" r="8" fill="var(--c4)"/>
+      <rect x="49" y="49" width="22" height="22" rx="6" fill="none" stroke="var(--c2)" stroke-width="5" transform="rotate(45 60 60)"/>
+    </symbol>
+    <symbol id="signal" viewBox="0 0 120 120">
+      <path d="M60 16c10 18 10 30 0 44-10-14-10-26 0-44Z" fill="currentColor"/>
+      <path d="M104 60c-18 10-30 10-44 0 14-10 26-10 44 0Z" fill="currentColor"/>
+      <path d="M60 104c-10-18-10-30 0-44 10 14 10 26 0 44Z" fill="currentColor"/>
+      <path d="M16 60c18-10 30-10 44 0-14 10-26 10-44 0Z" fill="currentColor"/>
+      <circle cx="60" cy="60" r="6" fill="#FFFFFF" opacity="0.9"/>
+    </symbol>
+    <pattern id="quietLeather" width="220" height="220" patternUnits="userSpaceOnUse">
+      <path d="M22 50C72 32 118 32 174 54M42 132C92 112 142 116 196 138M12 198C64 178 112 182 160 200" fill="none" stroke="#D5CEC0" stroke-width="1.1" opacity="0.20"/>
+      <circle cx="54" cy="72" r="1.6" fill="#D9A441" opacity="0.20"/>
+      <circle cx="164" cy="166" r="1.6" fill="#2EA7A0" opacity="0.16"/>
+    </pattern>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#base)"/>
+  <rect width="1920" height="1080" fill="url(#quietLeather)" opacity="0.95"/>
+  <rect x="84" y="70" width="1752" height="940" rx="78" fill="#FFFFFF" opacity="0.30" stroke="#D8BE78" stroke-width="4"/>
+
+  <g filter="url(#soft)" opacity="0.84">
+    <use href="#mark77" x="150" y="116" width="96" height="96" style="--c1:#E8578B;--c2:#4A90D9;--c3:#D9A441;--c4:#202532"/>
+    <use href="#signal" x="370" y="124" width="58" height="58" color="#E8578B"/>
+    <use href="#fourDot" x="578" y="120" width="58" height="58" style="--c1:#4A90D9;--c2:#8FCBFF;--c3:#A6D8FF;--c4:#DCEFFF"/>
+    <use href="#mark77" x="792" y="116" width="96" height="96" style="--c1:#7B61C9;--c2:#7DCB6D;--c3:#A58FE8;--c4:#2EA7A0"/>
+    <use href="#signal" x="1012" y="124" width="58" height="58" color="#7DCB6D"/>
+    <use href="#fourDot" x="1220" y="120" width="58" height="58" style="--c1:#F0985C;--c2:#FFC59D;--c3:#D9A441;--c4:#FFE9A6"/>
+    <use href="#mark77" x="1436" y="116" width="96" height="96" style="--c1:#202532;--c2:#D9A441;--c3:#4A90D9;--c4:#E8578B"/>
+    <use href="#signal" x="1662" y="124" width="58" height="58" color="#D9A441"/>
+
+    <use href="#fourDot" x="242" y="322" width="58" height="58" style="--c1:#2EA7A0;--c2:#9AE0DC;--c3:#4A90D9;--c4:#DCEFFF"/>
+    <use href="#mark77" x="458" y="314" width="96" height="96" style="--c1:#E8578B;--c2:#F0985C;--c3:#FF9DC0;--c4:#D9A441"/>
+    <use href="#signal" x="692" y="326" width="58" height="58" color="#B88928"/>
+    <use href="#fourDot" x="904" y="322" width="58" height="58" style="--c1:#7B61C9;--c2:#A58FE8;--c3:#E8578B;--c4:#FFB4D0"/>
+    <use href="#mark77" x="1118" y="314" width="96" height="96" style="--c1:#4A90D9;--c2:#2EA7A0;--c3:#8FCBFF;--c4:#202532"/>
+    <use href="#signal" x="1352" y="326" width="58" height="58" color="#F0985C"/>
+    <use href="#fourDot" x="1564" y="322" width="58" height="58" style="--c1:#7DCB6D;--c2:#BAE9AE;--c3:#D9A441;--c4:#FFE9A6"/>
+
+    <use href="#signal" x="150" y="540" width="58" height="58" color="#4A90D9"/>
+    <use href="#fourDot" x="364" y="536" width="58" height="58" style="--c1:#D9A441;--c2:#F2D17A;--c3:#E8578B;--c4:#F7BCD1"/>
+    <use href="#mark77" x="580" y="528" width="96" height="96" style="--c1:#202532;--c2:#E8578B;--c3:#4A90D9;--c4:#D9A441"/>
+    <use href="#signal" x="816" y="540" width="58" height="58" color="#2EA7A0"/>
+    <use href="#fourDot" x="1030" y="536" width="58" height="58" style="--c1:#E8578B;--c2:#FF9DC0;--c3:#7B61C9;--c4:#A58FE8"/>
+    <use href="#mark77" x="1242" y="528" width="96" height="96" style="--c1:#D9A441;--c2:#202532;--c3:#7DCB6D;--c4:#4A90D9"/>
+    <use href="#signal" x="1480" y="540" width="58" height="58" color="#7B61C9"/>
+    <use href="#fourDot" x="1694" y="536" width="58" height="58" style="--c1:#4A90D9;--c2:#8FCBFF;--c3:#2EA7A0;--c4:#9AE0DC"/>
+
+    <use href="#mark77" x="250" y="730" width="96" height="96" style="--c1:#7DCB6D;--c2:#4A90D9;--c3:#BAE9AE;--c4:#E8578B"/>
+    <use href="#signal" x="486" y="744" width="58" height="58" color="#F0985C"/>
+    <use href="#fourDot" x="700" y="740" width="58" height="58" style="--c1:#B88928;--c2:#D9A441;--c3:#7B61C9;--c4:#A58FE8"/>
+    <use href="#mark77" x="914" y="730" width="96" height="96" style="--c1:#E8578B;--c2:#7B61C9;--c3:#F0985C;--c4:#4A90D9"/>
+    <use href="#signal" x="1150" y="744" width="58" height="58" color="#4A90D9"/>
+    <use href="#fourDot" x="1364" y="740" width="58" height="58" style="--c1:#2EA7A0;--c2:#9AE0DC;--c3:#D9A441;--c4:#F2D17A"/>
+    <use href="#mark77" x="1578" y="730" width="96" height="96" style="--c1:#B88928;--c2:#E8578B;--c3:#202532;--c4:#7DCB6D"/>
+  </g>
+
+  <rect width="1920" height="1080" fill="#FFFFFF" opacity="0.08"/>
+</svg>

@@ -1,18 +1,129 @@
-import streamlit as st
+﻿import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+ef = None  # efinance is disabled on Streamlit Cloud because it writes inside site-packages.
+import yfinance as yf
 import io
 import base64
 import os
+import sys
 import time
 import random
 import requests
 from pathlib import Path
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
+# Fix Windows GBK console encoding — prevents emoji crash in TickFlow
+if sys.platform == 'win32':
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+
 from tickflow import TickFlow
+
+LUXE_ALPHA_LOGO_SVG = """
+<svg class="lux-alpha-logo" viewBox="0 0 120 120" role="img" aria-label="77 stock strategy logo" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="mark77-frame" x1="10" y1="10" x2="110" y2="110" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFE9A6"/>
+      <stop offset="0.48" stop-color="#C99A3A"/>
+      <stop offset="1" stop-color="#8F6A1F"/>
+    </linearGradient>
+    <filter id="mark77-lift" x="-18%" y="-18%" width="136%" height="136%">
+      <feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#3B2A10" flood-opacity="0.14"/>
+    </filter>
+  </defs>
+  <rect x="8" y="8" width="104" height="104" rx="24" fill="#FFFEFB" stroke="url(#mark77-frame)" stroke-width="2.8" filter="url(#mark77-lift)"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M28 34H61L34 88" stroke="#E8578B" stroke-width="11"/>
+    <path d="M58 34H91L64 88" stroke="#4A90D9" stroke-width="11"/>
+    <path d="M28 34H61" stroke="#D9A441" stroke-width="11"/>
+    <path d="M58 34H91" stroke="#202532" stroke-width="11"/>
+    <path d="M35 88L49 59" stroke="#7B61C9" stroke-width="11"/>
+    <path d="M64 88L78 59" stroke="#7DCB6D" stroke-width="11"/>
+    <path d="M30 78C45 69 64 72 88 52" stroke="#2EA7A0" stroke-width="3.2"/>
+  </g>
+  <circle cx="28" cy="34" r="2.5" fill="#E8578B"/>
+  <circle cx="61" cy="34" r="2.5" fill="#4A90D9"/>
+  <circle cx="91" cy="34" r="2.5" fill="#7DCB6D"/>
+  <circle cx="88" cy="52" r="2.5" fill="#F0985C"/>
+  <path d="M96 18l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" fill="#D9A441"/>
+  <path d="M20 91l2.5 5.5 5.5 2.5-5.5 2.5L20 108l-2.5-5.5L12 100l5.5-2.5z" fill="#7B61C9"/>
+</svg>
+"""
+
+BACKGROUND_77_PATTERN_SVG = """
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
+  <rect width="960" height="540" fill="#FBFAF7"/>
+  <g opacity="0.28" fill="none" stroke="#D8BE78" stroke-width="1.1">
+    <path d="M20 42c48-18 92-18 142 0M260 42c48-18 92-18 142 0M500 42c48-18 92-18 142 0M740 42c48-18 92-18 142 0"/>
+    <path d="M20 162c48-18 92-18 142 0M260 162c48-18 92-18 142 0M500 162c48-18 92-18 142 0M740 162c48-18 92-18 142 0"/>
+    <path d="M20 282c48-18 92-18 142 0M260 282c48-18 92-18 142 0M500 282c48-18 92-18 142 0M740 282c48-18 92-18 142 0"/>
+    <path d="M20 402c48-18 92-18 142 0M260 402c48-18 92-18 142 0M500 402c48-18 92-18 142 0M740 402c48-18 92-18 142 0"/>
+  </g>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.72">
+    <path d="M74 64h30L80 116" stroke="#E8578B" stroke-width="10"/>
+    <path d="M104 64h30l-24 52" stroke="#4A90D9" stroke-width="10"/>
+    <path d="M74 64h30" stroke="#D9A441" stroke-width="10"/>
+    <path d="M104 64h30" stroke="#202532" stroke-width="10"/>
+    <path d="M84 104c24-15 44-12 64-31" stroke="#2EA7A0" stroke-width="3"/>
+
+    <path d="M442 64h30l-24 52" stroke="#7B61C9" stroke-width="10"/>
+    <path d="M472 64h30l-24 52" stroke="#7DCB6D" stroke-width="10"/>
+    <path d="M442 64h30" stroke="#A58FE8" stroke-width="10"/>
+    <path d="M472 64h30" stroke="#2EA7A0" stroke-width="10"/>
+    <path d="M452 104c24-15 44-12 64-31" stroke="#2EA7A0" stroke-width="3"/>
+
+    <path d="M714 304h30l-24 52" stroke="#B88928" stroke-width="10"/>
+    <path d="M744 304h30l-24 52" stroke="#E8578B" stroke-width="10"/>
+    <path d="M714 304h30" stroke="#202532" stroke-width="10"/>
+    <path d="M744 304h30" stroke="#7DCB6D" stroke-width="10"/>
+    <path d="M724 344c24-15 44-12 64-31" stroke="#2EA7A0" stroke-width="3"/>
+  </g>
+  <g opacity="0.50">
+    <circle cx="260" cy="84" r="4" fill="#E8578B"/><circle cx="286" cy="84" r="4" fill="#4A90D9"/><circle cx="286" cy="110" r="4" fill="#2EA7A0"/><circle cx="260" cy="110" r="4" fill="#D9A441"/>
+    <circle cx="654" cy="90" r="4" fill="#F0985C"/><circle cx="680" cy="90" r="4" fill="#7B61C9"/><circle cx="680" cy="116" r="4" fill="#7DCB6D"/><circle cx="654" cy="116" r="4" fill="#4A90D9"/>
+    <circle cx="204" cy="330" r="4" fill="#4A90D9"/><circle cx="230" cy="330" r="4" fill="#E8578B"/><circle cx="230" cy="356" r="4" fill="#F0985C"/><circle cx="204" cy="356" r="4" fill="#2EA7A0"/>
+    <path d="M842 78l7 15 15 7-15 7-7 15-7-15-15-7 15-7z" fill="#D9A441"/>
+    <path d="M352 302l7 15 15 7-15 7-7 15-7-15-15-7 15-7z" fill="#E8578B"/>
+    <path d="M542 392l7 15 15 7-15 7-7 15-7-15-15-7 15-7z" fill="#4A90D9"/>
+  </g>
+</svg>
+"""
+
+BACKGROUND_77_PATTERN_URI = "data:image/svg+xml;base64," + base64.b64encode(
+    BACKGROUND_77_PATTERN_SVG.encode("utf-8")
+).decode("ascii")
+
+pattern_file = Path(__file__).with_name("background_77_multicolor_pattern.svg")
+if pattern_file.exists():
+    BACKGROUND_77_PATTERN_SVG = pattern_file.read_text(encoding="utf-8")
+    BACKGROUND_77_PATTERN_URI = "data:image/svg+xml;base64," + base64.b64encode(
+        BACKGROUND_77_PATTERN_SVG.encode("utf-8")
+    ).decode("ascii")
+
+# 77 theme chart semantics: A-share convention uses red for rise, green for fall.
+RISE_RED = "#E8578B"
+RISE_RED_DARK = "#B91C4C"
+RISE_RED_SOFT = "rgba(232,87,139,0.18)"
+FALL_GREEN = "#2EA7A0"
+FALL_GREEN_DARK = "#16766F"
+FALL_GREEN_SOFT = "rgba(46,167,160,0.16)"
+SIGNAL_BLUE = "#4A90D9"
+SIGNAL_GOLD = "#D9A441"
+SIGNAL_PURPLE = "#7B61C9"
+SIGNAL_ORANGE = "#F0985C"
+SIGNAL_LIME = "#7DCB6D"
+NEUTRAL_INK = "#202532"
+CHART_ACCENT_PALETTE = [
+    RISE_RED, SIGNAL_BLUE, SIGNAL_LIME, SIGNAL_GOLD,
+    NEUTRAL_INK, SIGNAL_PURPLE, SIGNAL_ORANGE, FALL_GREEN,
+]
 
 # 设置yfinance缓存目录到当前工作目录
 os.environ['YFINANCE_CACHE_DIR'] = str(Path('.') / 'yfinance_cache')
@@ -87,42 +198,53 @@ def get_deploy_secret(name, default=None):
     return os.getenv(name, default)
 
 def get_tickflow_client():
+    """初始化 TickFlow 客户端（session 内只尝试一次，缓存结果）"""
+    import contextlib
+
+    # 已初始化过，直接返回缓存结果
+    if "_tickflow_client" in st.session_state:
+        return st.session_state["_tickflow_client"]
+
+    stderr_discard = open(os.devnull, 'w', encoding='utf-8')
+    client = None
     try:
         api_key = get_deploy_secret("TICKFLOW_API_KEY")
         if api_key:
-            return TickFlow(api_key=api_key)
+            with contextlib.redirect_stderr(stderr_discard), contextlib.redirect_stdout(stderr_discard):
+                client = TickFlow(api_key=api_key)
+        else:
+            with contextlib.redirect_stderr(stderr_discard), contextlib.redirect_stdout(stderr_discard):
+                client = TickFlow.free()
+    except Exception:
+        # 静默失败，回退到 efinance / yfinance
+        pass
+    finally:
+        stderr_discard.close()
 
-        st.info("未配置 TICKFLOW_API_KEY，將嘗試使用 TickFlow 免費模式。")
-        return TickFlow.free()
-    except Exception as e:
-        st.write(f"TickFlow 初始化失败: {str(e)[:100]}...")
-        try:
-            return TickFlow.free()
-        except Exception as e2:
-            st.write(f"TickFlow 免费模式也失败: {str(e2)[:100]}...")
-            return None
+    st.session_state["_tickflow_client"] = client
+    return client
 
-# Matplotlib Apple 风格设置
+# Matplotlib 简约白色风格设置
 plt.rcParams['font.sans-serif'] = ['PingFang SC', 'Microsoft YaHei', 'SimHei']
 plt.rcParams['axes.unicode_minus'] = False
-plt.rcParams['figure.facecolor'] = '#F5F5F7'
+plt.rcParams['figure.facecolor'] = '#F3F4F6'
 plt.rcParams['axes.facecolor'] = '#FFFFFF'
-plt.rcParams['axes.edgecolor'] = '#E5E5EA'
+plt.rcParams['axes.edgecolor'] = '#E5E7EB'
 plt.rcParams['axes.grid'] = True
-plt.rcParams['grid.alpha'] = 0.4
-plt.rcParams['grid.color'] = '#E5E5EA'
-plt.rcParams['text.color'] = '#1D1D1F'
-plt.rcParams['axes.labelcolor'] = '#6E6E73'
-plt.rcParams['xtick.color'] = '#6E6E73'
-plt.rcParams['ytick.color'] = '#6E6E73'
+plt.rcParams['grid.alpha'] = 0.25
+plt.rcParams['grid.color'] = '#E5E7EB'
+plt.rcParams['text.color'] = '#1F2937'
+plt.rcParams['axes.labelcolor'] = '#6B7280'
+plt.rcParams['xtick.color'] = '#6B7280'
+plt.rcParams['ytick.color'] = '#6B7280'
 plt.rcParams['font.size'] = 11
 plt.rcParams['lines.linewidth'] = 1.5
-plt.rcParams['lines.color'] = '#007AFF'
+plt.rcParams['lines.color'] = SIGNAL_BLUE
 
 # 设置Streamlit主题
 st.set_page_config(
-    page_title="股票交易策略回测系统",
-    page_icon="📈",
+    page_title="77股票交易策略回测工作台",
+    page_icon="77",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -144,81 +266,72 @@ def get_theme_mode():
         # 如果获取失败，默认返回light
         return 'light'
 
-# 根据主题获取颜色方案 — Apple palette
+# 根据主题获取颜色方案 - 白色基底 + 多色图表
 def get_color_scheme():
-    """返回 Apple 风格的 Plotly 图表颜色方案"""
+    """返回白色卡片风格的 Plotly 图表颜色方案"""
     theme = get_theme_mode()
     if theme == 'dark':
         return {
-            'bg_color': '#000000',
-            'paper_color': '#1C1C1E',
-            'text_color': '#F5F5F7',
-            'text_secondary': '#AEAEB2',
-            'grid_color': 'rgba(255,255,255,0.06)',
+            'bg_color': '#141722',
+            'paper_color': '#1D2230',
+            'text_color': '#F8F7F2',
+            'text_secondary': '#B8BFD0',
+            'grid_color': 'rgba(255,255,255,0.07)',
             'zero_line': 'rgba(255,255,255,0.12)',
-            'border_color': 'rgba(255,255,255,0.08)',
-            'hover_bg': 'rgba(44,44,46,0.95)',
-            'hover_border': '#0A84FF',
-            'accent': '#0A84FF',
+            'border_color': 'rgba(216,190,120,0.18)',
+            'hover_bg': 'rgba(29,34,48,0.97)',
+            'hover_border': RISE_RED,
+            'accent': RISE_RED,
         }
     else:
         return {
-            'bg_color': '#F5F5F7',
-            'paper_color': '#FFFFFF',
-            'text_color': '#1D1D1F',
-            'text_secondary': '#6E6E73',
-            'grid_color': 'rgba(0,0,0,0.04)',
-            'zero_line': 'rgba(0,0,0,0.10)',
-            'border_color': 'rgba(0,0,0,0.06)',
-            'hover_bg': 'rgba(255,255,255,0.96)',
-            'hover_border': '#007AFF',
-            'accent': '#007AFF',
+            'bg_color': '#FAF8F2',
+            'paper_color': 'rgba(255,255,255,0.96)',
+            'text_color': '#171923',
+            'text_secondary': '#667085',
+            'grid_color': 'rgba(143,106,31,0.10)',
+            'zero_line': 'rgba(32,37,50,0.10)',
+            'border_color': 'rgba(216,190,120,0.34)',
+            'hover_bg': 'rgba(255,255,255,0.98)',
+            'hover_border': RISE_RED,
+            'accent': RISE_RED,
         }
 
-def strategy_uses_blocked_dependency(strategy_code):
-    """Detect imports that are unavailable or unsafe on Streamlit Cloud."""
-    blocked_patterns = [
-        'import efinance',
-        'from efinance',
-    ]
-    normalized = strategy_code.lower()
-    return any(pattern in normalized for pattern in blocked_patterns)
-
-# 统一的 Plotly 图表 Apple 风格模板
+# 统一的 Plotly 图表简约白色风格模板
 def get_plotly_template(colors):
-    """返回 Apple 风格 Plotly layout 基础配置"""
+    """返回简约白色风格 Plotly layout 基础配置"""
     return dict(
         plot_bgcolor=colors['paper_color'],
         paper_bgcolor=colors['bg_color'],
         font=dict(
             color=colors['text_color'],
-            size=13,
-            family='-apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif'
+            size=12,
+            family='"Inter", -apple-system, "PingFang SC", sans-serif'
         ),
         xaxis=dict(
             gridcolor=colors['grid_color'],
             zerolinecolor=colors['zero_line'],
             color=colors['text_secondary'],
-            tickfont=dict(size=11),
-            title_font=dict(size=12, color=colors['text_color']),
+            tickfont=dict(size=10),
+            title_font=dict(size=11, color=colors['text_color']),
         ),
         yaxis=dict(
             gridcolor=colors['grid_color'],
             zerolinecolor=colors['zero_line'],
             color=colors['text_secondary'],
-            tickfont=dict(size=11),
-            title_font=dict(size=12, color=colors['text_color']),
+            tickfont=dict(size=10),
+            title_font=dict(size=11, color=colors['text_color']),
         ),
         hoverlabel=dict(
             bgcolor=colors['hover_bg'],
             bordercolor=colors['hover_border'],
-            font=dict(size=12, color=colors['text_color'], family='SF Mono, Menlo, monospace'),
+            font=dict(size=11, color=colors['text_color'], family='"JetBrains Mono", "SF Mono", monospace'),
             namelength=-1,
         ),
         legend=dict(
             bgcolor='rgba(255,255,255,0.0)',
             bordercolor='rgba(0,0,0,0)',
-            font=dict(size=12, color=colors['text_secondary']),
+            font=dict(size=11, color=colors['text_secondary']),
             orientation='h',
             yanchor='bottom',
             y=1.02,
@@ -226,78 +339,115 @@ def get_plotly_template(colors):
             x=0.5,
         ),
         margin=dict(l=40, r=24, t=48, b=40),
-        dragmode='pan',
+        dragmode=False,
         modebar=dict(
             bgcolor='rgba(0,0,0,0)',
             color=colors['text_secondary'],
             activecolor=colors['accent'],
             orientation='h',
         ),
-        colorway=['#007AFF', '#FF3B30', '#34C759', '#FF9500', '#5AC8FA', '#AF52DE'],
+        colorway=CHART_ACCENT_PALETTE,
     )
 
-# 自定义CSS样式 — Apple-style premium minimalist
+CHART_RENDER_CONFIG = {
+    "displaylogo": False,
+    "responsive": True,
+    "scrollZoom": False,
+    "doubleClick": False,
+    "modeBarButtonsToRemove": [
+        "zoom2d", "pan2d", "select2d", "lasso2d",
+        "zoomIn2d", "zoomOut2d", "autoScale2d",
+        "resetScale2d", "orbitRotation", "tableRotation",
+    ],
+}
+
+KLINE_RENDER_CONFIG = {
+    "displaylogo": False,
+    "responsive": True,
+    "scrollZoom": True,
+    "doubleClick": "reset",
+    "displayModeBar": True,
+    "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+}
+
+def render_chart(fig, key=None, config=None):
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        config=config or CHART_RENDER_CONFIG,
+        key=key,
+    )
+
+# 自定义CSS样式 - 白色基底 + 多色点缀卡片（v3 · cache-bust 2026-06-08）
+st.markdown(
+    f"""<style>:root {{ --pattern-77-bg: url("{BACKGROUND_77_PATTERN_URI}"); --mx: 50vw; --my: 50vh; }}</style>""",
+    unsafe_allow_html=True,
+)
+
 st.markdown("""
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
 <style>
     /* ═══════════════════════════════════════════════
-     * Design tokens — Apple HIG inspired
+     * Design Tokens — Luxe Alpha
+     * Original white-gold financial atelier system · multi-accent signals
      * ═══════════════════════════════════════════════ */
     :root {
-        --apple-bg: #F5F5F7;
-        --apple-paper: #FFFFFF;
-        --apple-text: #1D1D1F;
-        --apple-text-2: #6E6E73;
-        --apple-text-3: #AEAEB2;
-        --apple-accent: #007AFF;
-        --apple-accent-hover: #0062CC;
-        --apple-border: rgba(0,0,0,0.06);
-        --apple-shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
-        --apple-shadow-md: 0 4px 16px rgba(0,0,0,0.06);
-        --apple-shadow-lg: 0 8px 32px rgba(0,0,0,0.08);
-        --apple-radius-sm: 10px;
-        --apple-radius-md: 16px;
-        --apple-radius-lg: 20px;
-        --apple-radius-pill: 980px;
-        --apple-green: #34C759;
-        --apple-red: #FF3B30;
-        --apple-orange: #FF9500;
-        --apple-teal: #5AC8FA;
+        --bg: #F6F7FA;
+        --card: #FFFFFF;
+        --text: #151922;
+        --text-2: #667085;
+        --text-3: #98A2B3;
+        --ink: #12151C;
+        --gold: #C99A3A;
+        --gold-deep: #8F6A1F;
+        --gold-soft: #F7E2A1;
+        --accent-blue: #4A90D9;
+        --accent-green: #2EA7A0;
+        --accent-amber: #F0985C;
+        --accent-purple: #8B6FC0;
+        --accent-pink: #E87DA0;
+        --accent-teal: #3BA99C;
+        --border: #E4E7EE;
+        --border-light: #F1F3F7;
+        --shadow-card: 0 10px 30px rgba(18, 21, 28, 0.06), 0 1px 2px rgba(18, 21, 28, 0.04);
+        --shadow-hover: 0 14px 44px rgba(18, 21, 28, 0.09);
+        --radius: 8px;
+        --radius-sm: 8px;
     }
 
-    /* ── Global · base ── */
+    /* ── Global base · light gray canvas ── */
     .main {
-        background-color: rgba(245, 245, 247, 0.78);
-        backdrop-filter: blur(18px) saturate(140%);
-        -webkit-backdrop-filter: blur(18px) saturate(140%);
-        color: #1D1D1F;
-        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", "PingFang SC", sans-serif;
+        background-color: #F6F7FA !important;
+        color: #151922;
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
         -webkit-font-smoothing: antialiased;
-        position: relative;
-        z-index: 1;
+        -moz-osx-font-smoothing: grayscale;
     }
-    /* Ensure the app root is transparent */
     [data-testid="stApp"] {
-        background: transparent !important;
+        background:
+            radial-gradient(circle at 14% 8%, rgba(201,154,58,0.13), transparent 24%),
+            radial-gradient(circle at 92% 12%, rgba(74,144,217,0.12), transparent 22%),
+            linear-gradient(135deg, #FAFBFD 0%, #F6F7FA 52%, #EEF1F6 100%) !important;
     }
-    #root {
-        background: transparent !important;
-    }
+
     body {
-        background: linear-gradient(135deg, #E8E6E1 0%, #DDD9D2 30%, #D5D0C8 60%, #E0DBD4 100%) !important;
+        background: #F6F7FA !important;
         overflow-x: hidden;
     }
     .main .block-container {
-        padding-top: 2rem;
-        padding-bottom: 3rem;
-        max-width: 1400px;
+        padding: 2rem 2.5rem 4rem 2.5rem;
+        max-width: 1440px;
     }
 
-    /* ── Sidebar · frosted glass ── */
+    /* ── Sidebar ── */
     [data-testid="stSidebar"] {
-        background: rgba(245,245,247,0.82);
-        backdrop-filter: blur(24px) saturate(180%);
-        -webkit-backdrop-filter: blur(24px) saturate(180%);
-        border-right: 1px solid rgba(0,0,0,0.06);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.98), rgba(251,252,255,0.96)),
+            repeating-linear-gradient(135deg, rgba(201,154,58,0.05) 0 1px, transparent 1px 16px);
+        border-right: 1px solid rgba(201,154,58,0.20);
+        box-shadow: 12px 0 36px rgba(18,21,28,0.04);
     }
     [data-testid="stSidebar"] .block-container {
         padding: 1.5rem 1.25rem;
@@ -306,552 +456,1138 @@ st.markdown("""
     /* ── Typography ── */
     h1 {
         font-size: 2rem !important;
-        font-weight: 700 !important;
-        letter-spacing: -0.022em !important;
-        color: #1D1D1F !important;
+        font-weight: 600 !important;
+        letter-spacing: -0.025em !important;
+        color: #151922 !important;
         margin-bottom: 0.25rem !important;
+        line-height: 1.2 !important;
     }
     h2 {
-        font-size: 1.5rem !important;
+        font-size: 1.35rem !important;
         font-weight: 600 !important;
         letter-spacing: -0.018em !important;
-        color: #1D1D1F !important;
+        color: #151922 !important;
+        line-height: 1.25 !important;
+        margin-top: 1.5rem !important;
     }
     h3 {
-        font-size: 1.2rem !important;
+        font-size: 1.1rem !important;
         font-weight: 600 !important;
-        color: #1D1D1F !important;
+        letter-spacing: -0.012em !important;
+        color: #151922 !important;
     }
-    h4, h5, h6 {
-        font-weight: 600 !important;
-        color: #1D1D1F !important;
+    p, li, span, div { color: #151922; }
+
+    /* ── Luxe Alpha brand system ── */
+    .lux-alpha-hero {
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 1.15rem;
+        align-items: center;
+        min-height: 132px;
+        padding: 1.2rem 1.35rem;
+        margin: 0 0 1.25rem 0;
+        background:
+            linear-gradient(120deg, rgba(255,255,255,0.98), rgba(247,248,251,0.94)),
+            radial-gradient(circle at 80% 20%, rgba(201,154,58,0.18), transparent 26%);
+        border: 1px solid rgba(201,154,58,0.26);
+        border-radius: 8px;
+        box-shadow: var(--shadow-card);
     }
-    p, li, span, div {
-        color: #1D1D1F;
+    .lux-alpha-hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+            radial-gradient(circle, rgba(232,87,139,0.18) 0 2px, transparent 2.5px),
+            radial-gradient(circle, rgba(74,144,217,0.16) 0 2px, transparent 2.5px),
+            radial-gradient(circle, rgba(46,167,160,0.15) 0 2px, transparent 2.5px);
+        background-size: 78px 78px, 96px 96px, 116px 116px;
+        background-position: 22px 18px, 46px 40px, 76px 8px;
+        opacity: 0.72;
+        pointer-events: none;
+    }
+    .lux-alpha-hero > * { position: relative; z-index: 1; }
+    .lux-alpha-logo {
+        width: 86px;
+        height: 86px;
+        display: block;
+    }
+    .lux-alpha-kicker {
+        color: #8F6A1F !important;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        margin-bottom: 0.28rem;
+    }
+    .lux-alpha-title {
+        margin: 0;
+        color: #12151C !important;
+        font-size: 2rem;
+        font-weight: 650;
+        letter-spacing: 0 !important;
+        line-height: 1.1;
+    }
+    .lux-alpha-subtitle {
+        margin-top: 0.42rem;
+        color: #667085 !important;
+        font-size: 0.92rem;
+        line-height: 1.6;
+        max-width: 760px;
+    }
+    .lux-alpha-badges {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 0.45rem;
+        min-width: 240px;
+    }
+    .lux-alpha-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.38rem;
+        padding: 0.42rem 0.58rem;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.82);
+        border: 1px solid rgba(201,154,58,0.22);
+        color: #475467 !important;
+        font-size: 0.75rem;
+        font-weight: 600;
+        box-shadow: 0 6px 16px rgba(18,21,28,0.04);
+    }
+    .lux-alpha-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    .lux-alpha-sidebar-brand {
+        padding: 0.95rem 0.95rem 1rem;
+        margin-bottom: 1rem;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #FFFFFF, #F8FAFC);
+        border: 1px solid rgba(201,154,58,0.24);
+        box-shadow: 0 8px 24px rgba(18,21,28,0.05);
+    }
+    .lux-alpha-sidebar-brand .lux-alpha-logo {
+        width: 46px;
+        height: 46px;
+        margin-bottom: 0.45rem;
+    }
+    .lux-alpha-sidebar-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #12151C !important;
+        margin: 0;
+    }
+    .lux-alpha-sidebar-caption {
+        color: #667085 !important;
+        font-size: 0.75rem;
+        margin: 0.12rem 0 0;
     }
 
-    /* ── Accent text helpers ── */
-    .accent-positive {
-        color: #34C759 !important;
-        font-weight: 600;
-    }
-    .accent-negative {
-        color: #FF3B30 !important;
-        font-weight: 600;
-    }
-    .accent-primary {
-        color: #007AFF !important;
-        font-weight: 600;
-    }
-    .accent-highlight {
-        color: #FF9500 !important;
-        font-weight: 590;
-    }
+    /* ── Accent color helpers ── */
+    .accent-blue   { color: #4A90D9 !important; }
+    .accent-green  { color: #2EA7A0 !important; }
+    .accent-amber  { color: #F0985C !important; }
+    .accent-purple { color: #8B6FC0 !important; }
+    .accent-pink   { color: #E87DA0 !important; }
+    .accent-teal   { color: #3BA99C !important; }
     .text-caption {
-        color: #6E6E73 !important;
-        font-size: 0.82rem;
-        letter-spacing: 0.01em;
+        color: #6B7280 !important;
+        font-size: 0.8rem;
+        letter-spacing: 0.015em;
     }
     .text-mono {
-        font-family: 'SF Mono', 'Cascadia Code', 'JetBrains Mono', 'Menlo', monospace !important;
+        font-family: "JetBrains Mono", "SF Mono", monospace !important;
         font-feature-settings: "tnum";
+        font-variant-numeric: tabular-nums;
     }
 
-    /* ── Section accent bar ── */
-    .section-accent {
-        border-left: 3px solid #007AFF;
-        padding-left: 1rem;
-        margin: 1rem 0;
-    }
-
-    /* ── Buttons · pill shape ── */
-    .stButton > button {
-        background: #007AFF;
-        color: #FFFFFF;
+    /* ── Divider ── */
+    hr {
         border: none;
-        border-radius: 980px;
-        padding: 0.6rem 1.5rem;
-        font-weight: 590;
-        font-size: 0.9rem;
-        letter-spacing: -0.01em;
-        transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
-        box-shadow: none;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(201,154,58,0.32), transparent);
+        margin: 1.5rem 0;
+    }
+
+    /* ── Buttons · white cards with colored border on hover ── */
+    .stButton > button {
+        background: linear-gradient(180deg, #FFFFFF, #FAFBFD);
+        color: #151922;
+        border: 1px solid rgba(201,154,58,0.34);
+        border-radius: 8px;
+        padding: 0.5rem 1.25rem;
+        font-weight: 500;
+        font-size: 0.875rem;
+        transition: all 0.2s ease;
+        box-shadow: 0 8px 20px rgba(18,21,28,0.05);
     }
     .stButton > button:hover {
-        background: #0062CC;
-        box-shadow: 0 2px 12px rgba(0,122,255,0.25);
-        transform: none;
+        border-color: #C99A3A;
+        color: #8F6A1F;
+        background: #FFFCF4;
+        box-shadow: 0 10px 28px rgba(201,154,58,0.14);
     }
     .stButton > button:active {
-        background: #0051AA;
-        transform: scale(0.98);
+        transform: scale(0.985);
+    }
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #12151C 0%, #2D3342 58%, #C99A3A 140%);
+        color: #FFFFFF;
+        border-color: #12151C;
+    }
+    .stButton > button[kind="primary"]:hover {
+        background: linear-gradient(135deg, #06080D 0%, #242A37 58%, #D9A441 135%);
+        border-color: #C99A3A;
+        color: #FFFFFF;
     }
 
-    /* ── Inputs · clean border ── */
+    /* ── Inputs ── */
     .stTextInput > div > div > input,
     .stNumberInput > div > div > input,
     .stDateInput > div > div > input,
-    .stSelectbox > div > div > select {
-        background: #FFFFFF;
-        color: #1D1D1F;
-        border: 1px solid rgba(0,0,0,0.12);
-        border-radius: 10px;
-        padding: 0.5rem 0.75rem;
-        font-size: 0.9rem;
-        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    .stSelectbox > div > div > div {
+        background: rgba(255,255,255,0.94);
+        color: #151922;
+        border: 1px solid #D8DEE8;
+        border-radius: 8px;
+        font-size: 0.875rem;
     }
     .stTextInput > div > div > input:focus,
-    .stNumberInput > div > div > input:focus,
-    .stDateInput > div > div > input:focus,
-    .stSelectbox > div > div > select:focus {
-        border-color: #007AFF;
-        box-shadow: 0 0 0 3px rgba(0,122,255,0.12);
+    .stNumberInput > div > div > input:focus {
+        border-color: #C99A3A;
+        box-shadow: 0 0 0 3px rgba(201,154,58,0.14);
         outline: none;
     }
 
-    /* ── Tables · subtle striped ── */
-    .stTable, [data-testid="stTable"] {
-        border-radius: 16px;
-        overflow: hidden;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-        border: 1px solid rgba(0,0,0,0.06);
-    }
-    .stTable table {
-        border-collapse: separate;
-        border-spacing: 0;
-    }
-    .stTable thead th {
-        background: #FAFAFA;
-        color: #6E6E73;
-        font-weight: 590;
-        font-size: 0.8rem;
-        text-transform: none;
-        letter-spacing: -0.01em;
-        padding: 0.75rem 1rem;
-        border-bottom: 1px solid rgba(0,0,0,0.06);
-    }
-    .stTable tbody td {
-        padding: 0.65rem 1rem;
-        font-size: 0.9rem;
-        border-bottom: 1px solid rgba(0,0,0,0.04);
-        color: #1D1D1F;
-    }
-    .stTable tbody tr:last-child td {
-        border-bottom: none;
-    }
-    .stTable tbody tr:nth-child(even) {
-        background: rgba(0,0,0,0.015);
-    }
-
-    /* ── DataFrame styling ── */
-    [data-testid="stDataFrame"] {
-        border-radius: 16px;
-        overflow: hidden;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-        border: 1px solid rgba(0,0,0,0.06);
-    }
-
-    /* ── Charts · card-like ── */
+    /* ── Cards: white + thin border + subtle shadow ── */
     .stPlotlyChart {
         background: #FFFFFF;
-        border-radius: 16px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-        border: 1px solid rgba(0,0,0,0.06);
+        border-radius: 8px;
+        box-shadow: var(--shadow-card);
+        border: 1px solid rgba(201,154,58,0.18);
         padding: 1rem;
         margin: 0.75rem 0;
     }
 
-    /* ── Expander · frosted card ── */
+    /* ── DataFrame / Table cards ── */
+    [data-testid="stTable"], [data-testid="stDataFrame"] {
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+        border: 1px solid rgba(201,154,58,0.16);
+        background: #FFFFFF;
+    }
+    .stTable thead th {
+        background: #F9FAFB;
+        color: #6B7280;
+        font-weight: 600;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 0.65rem 1rem;
+        border-bottom: 1px solid #E5E7EB;
+    }
+    .stTable tbody td {
+        padding: 0.6rem 1rem;
+        font-size: 0.875rem;
+        border-bottom: 1px solid #F3F4F6;
+        color: #1F2937;
+    }
+    .stTable tbody tr:last-child td { border-bottom: none; }
+    .stTable tbody tr:nth-child(even) { background: #F9FAFB; }
+
+    /* ── Expander ── */
     [data-testid="stExpander"] {
         background: #FFFFFF;
-        border-radius: 16px;
-        border: 1px solid rgba(0,0,0,0.06);
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-        overflow: hidden;
-    }
-    [data-testid="stExpander"] details {
-        border-radius: 16px;
+        border-radius: 8px;
+        border: 1px solid rgba(201,154,58,0.18);
+        box-shadow: var(--shadow-card);
     }
     [data-testid="stExpander"] summary {
         padding: 0.75rem 1.25rem;
-        font-weight: 590;
-        color: #1D1D1F;
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #1F2937;
     }
 
-    /* ── Metrics · big numbers ── */
+    /* ── Metrics · card with colored left border ── */
     [data-testid="stMetric"] {
         background: #FFFFFF;
-        border-radius: 16px;
-        padding: 1rem 1.25rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-        border: 1px solid rgba(0,0,0,0.06);
+        border-radius: 8px;
+        padding: 1.25rem 1.5rem;
+        box-shadow: var(--shadow-card);
+        border: 1px solid rgba(201,154,58,0.18);
+        border-left: 4px solid #C99A3A;
+        transition: box-shadow 0.2s ease;
+    }
+    [data-testid="stMetric"]:hover {
+        box-shadow: var(--shadow-hover);
     }
     [data-testid="stMetric"] label {
-        color: #6E6E73 !important;
-        font-size: 0.8rem !important;
-        font-weight: 500 !important;
+        color: #6B7280 !important;
+        font-size: 0.75rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
     }
     [data-testid="stMetric"] [data-testid="stMetricValue"] {
         font-size: 1.8rem !important;
-        font-weight: 700 !important;
-        color: #1D1D1F !important;
+        font-weight: 600 !important;
+        color: #151922 !important;
     }
 
-    /* ── Success / Warning / Error ── */
+    /* ── Metric color variants via nth-child ── */
+    [data-testid="stMetric"]:nth-child(4n+1) { border-left-color: #C99A3A; }
+    [data-testid="stMetric"]:nth-child(4n+2) { border-left-color: #2EA7A0; }
+    [data-testid="stMetric"]:nth-child(4n+3) { border-left-color: #E8578B; }
+    [data-testid="stMetric"]:nth-child(4n+0) { border-left-color: #4A90D9; }
+
+    /* ── Alerts ── */
     [data-testid="stSuccess"] {
-        background: rgba(52,199,89,0.08);
-        border: 1px solid rgba(52,199,89,0.2);
-        border-radius: 12px;
-        color: #248A3D;
+        background: #F0FDF6;
+        border: 1px solid #BBF7D0;
+        border-radius: 8px;
+        color: #166534;
     }
     [data-testid="stWarning"] {
-        background: rgba(255,149,0,0.08);
-        border: 1px solid rgba(255,149,0,0.2);
-        border-radius: 12px;
-        color: #C46500;
+        background: #FFFBF0;
+        border: 1px solid #FDE68A;
+        border-radius: 8px;
+        color: #92400E;
     }
     [data-testid="stError"] {
-        background: rgba(255,59,48,0.08);
-        border: 1px solid rgba(255,59,48,0.2);
-        border-radius: 12px;
-        color: #C41E1E;
+        background: #FEF2F2;
+        border: 1px solid #FECACA;
+        border-radius: 8px;
+        color: #991B1B;
     }
     [data-testid="stInfo"] {
-        background: rgba(0,122,255,0.06);
-        border: 1px solid rgba(0,122,255,0.15);
-        border-radius: 12px;
-        color: #0062CC;
+        background: #F0F6FF;
+        border: 1px solid #BFDBFE;
+        border-radius: 8px;
+        color: #1E40AF;
     }
 
-    /* ── Dividers ── */
-    hr {
-        border: none;
-        border-top: 1px solid rgba(0,0,0,0.06);
-        margin: 1.5rem 0;
-    }
-
-    /* ── Scrollbar · thin ── */
+    /* ── Scrollbar ── */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb {
-        background: rgba(0,0,0,0.15);
-        border-radius: 20px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-        background: rgba(0,0,0,0.25);
-    }
+    ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 20px; }
+    ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
 
     /* ── File uploader ── */
     [data-testid="stFileUploader"] {
-        border-radius: 16px;
-        border: 1.5px dashed rgba(0,0,0,0.12);
+        border-radius: 8px;
+        border: 1.5px dashed rgba(201,154,58,0.42);
+        background:
+            linear-gradient(135deg, rgba(255,255,255,0.92), rgba(248,250,252,0.86)),
+            radial-gradient(circle at 18% 24%, rgba(232,87,139,0.08), transparent 20%);
+    }
+
+    /* ── Slider ── */
+    .stSlider > div > div > div > div { background: #C99A3A; }
+
+    /* ── Tabs ── */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0;
+        border-bottom: 1px solid #E5E7EB;
         background: transparent;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px 8px 0 0;
+        padding: 0.6rem 1.25rem;
+        font-weight: 500;
+        color: #6B7280;
+    }
+    .stTabs [aria-selected="true"] {
+        color: #8F6A1F;
+        border-bottom: 2px solid #C99A3A;
     }
 
     /* ═══════════════════════════════════════════════
-     * Dark mode overrides
+     * Dark mode
      * ═══════════════════════════════════════════════ */
-    [data-theme="dark"] .main {
-        background-color: rgba(28, 28, 30, 0.78);
-        backdrop-filter: blur(18px) saturate(140%);
-        -webkit-backdrop-filter: blur(18px) saturate(140%);
-        color: #F5F5F7;
+    [data-theme="dark"] .main, [data-theme="dark"] [data-testid="stApp"] {
+        background: #111827 !important;
+        color: #F3F4F6;
     }
-    [data-theme="dark"] body {
-        background: linear-gradient(135deg, #1C1C1E 0%, #161618 40%, #1E1E20 70%, #18181A 100%) !important;
-    }
+    [data-theme="dark"] body { background: #111827 !important; }
     [data-theme="dark"] [data-testid="stSidebar"] {
-        background: rgba(28,28,30,0.82);
-        backdrop-filter: blur(24px) saturate(180%);
-        -webkit-backdrop-filter: blur(24px) saturate(180%);
-        border-right: 1px solid rgba(255,255,255,0.08);
+        background: #1F2937;
+        border-right: 1px solid #374151;
     }
     [data-theme="dark"] h1, [data-theme="dark"] h2, [data-theme="dark"] h3,
     [data-theme="dark"] h4, [data-theme="dark"] h5, [data-theme="dark"] h6,
     [data-theme="dark"] p, [data-theme="dark"] li, [data-theme="dark"] span, [data-theme="dark"] div {
-        color: #F5F5F7;
+        color: #F3F4F6;
     }
-    [data-theme="dark"] .accent-primary {
-        color: #0A84FF !important;
+    [data-theme="dark"] .text-caption { color: #9CA3AF !important; }
+    [data-theme="dark"] .stButton > button {
+        background: #1F2937;
+        color: #F3F4F6;
+        border-color: #374151;
     }
-    [data-theme="dark"] .text-caption {
-        color: #AEAEB2 !important;
+    [data-theme="dark"] .stButton > button:hover {
+        border-color: #4A90D9;
+        color: #60A5FA;
+        background: #1E3A5F;
     }
     [data-theme="dark"] .stTextInput > div > div > input,
-    [data-theme="dark"] .stNumberInput > div > div > input,
-    [data-theme="dark"] .stDateInput > div > div > input,
-    [data-theme="dark"] .stSelectbox > div > div > select {
-        background: #1C1C1E;
-        color: #F5F5F7;
-        border: 1px solid rgba(255,255,255,0.12);
-    }
-    [data-theme="dark"] .stTable thead th {
-        background: #1C1C1E;
-        color: #AEAEB2;
-        border-bottom: 1px solid rgba(255,255,255,0.08);
-    }
-    [data-theme="dark"] .stTable tbody td {
-        color: #F5F5F7;
-        border-bottom: 1px solid rgba(255,255,255,0.04);
-    }
-    [data-theme="dark"] .stTable tbody tr:nth-child(even) {
-        background: rgba(255,255,255,0.025);
+    [data-theme="dark"] .stNumberInput > div > div > input {
+        background: #1F2937;
+        color: #F3F4F6;
+        border-color: #374151;
     }
     [data-theme="dark"] .stPlotlyChart,
     [data-theme="dark"] [data-testid="stExpander"],
-    [data-theme="dark"] [data-testid="stMetric"] {
-        background: #1C1C1E;
-        border: 1px solid rgba(255,255,255,0.08);
+    [data-theme="dark"] [data-testid="stMetric"],
+    [data-theme="dark"] [data-testid="stTable"],
+    [data-theme="dark"] [data-testid="stDataFrame"] {
+        background: #1F2937;
+        border-color: #374151;
     }
-    [data-theme="dark"] hr {
-        border-top: 1px solid rgba(255,255,255,0.08);
+    [data-theme="dark"] [data-testid="stMetric"] label { color: #9CA3AF !important; }
+    [data-theme="dark"] [data-testid="stMetric"] [data-testid="stMetricValue"] { color: #F3F4F6 !important; }
+    [data-theme="dark"] .stTable thead th {
+        background: #111827;
+        color: #9CA3AF;
+        border-bottom-color: #374151;
+    }
+    [data-theme="dark"] .stTable tbody td {
+        color: #F3F4F6;
+        border-bottom-color: #1F2937;
+    }
+    [data-theme="dark"] .stTable tbody tr:nth-child(even) { background: #111827; }
+    [data-theme="dark"] hr { background: #374151; }
+
+    /* ═══════════════════════════════════════════════
+     * 77 Multicolor luxury refresh
+     * ═══════════════════════════════════════════════ */
+    :root {
+        --bg: #FAF8F2;
+        --card: rgba(255,255,255,0.92);
+        --text: #171923;
+        --text-2: #667085;
+        --ink: #202532;
+        --gold: #D9A441;
+        --gold-deep: #8F6A1F;
+        --pink: #E8578B;
+        --blue: #4A90D9;
+        --green: #7DCB6D;
+        --teal: #2EA7A0;
+        --purple: #7B61C9;
+        --orange: #F0985C;
+        --border: rgba(216,190,120,0.34);
+        --shadow-card: 0 18px 50px rgba(43, 33, 12, 0.08), 0 2px 5px rgba(43, 33, 12, 0.04);
+        --shadow-hover: 0 22px 60px rgba(43, 33, 12, 0.13);
+    }
+
+    [data-testid="stApp"] {
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.78), rgba(250,248,242,0.92)),
+            var(--pattern-77-bg),
+            radial-gradient(circle at 14% 8%, rgba(232,87,139,0.12), transparent 22%),
+            radial-gradient(circle at 88% 6%, rgba(74,144,217,0.12), transparent 24%),
+            #FAF8F2 !important;
+        background-size: auto, cover, auto, auto, auto !important;
+        background-position: center top, center top, center, center, center !important;
+        background-attachment: fixed, fixed, fixed, fixed, fixed !important;
+    }
+    .main {
+        background: transparent !important;
+    }
+    .main .block-container {
+        padding-top: 1.75rem;
+    }
+    [data-testid="stHeader"] {
+        background: rgba(255,255,255,0.72) !important;
+        backdrop-filter: blur(14px);
+        border-bottom: 1px solid rgba(216,190,120,0.22);
+    }
+    #bg-canvas {
+        display: none !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+    #interactive-77-bg {
+        display: none !important;
+    }
+    #pattern-hover-layer {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background: var(--pattern-77-bg) center top / cover no-repeat;
+        opacity: 0.52;
+        filter: saturate(2.05) brightness(1.03);
+        mix-blend-mode: multiply;
+        -webkit-mask-image: radial-gradient(190px circle at var(--mx) var(--my), rgba(0,0,0,0.96), rgba(0,0,0,0.52) 38%, transparent 72%);
+        mask-image: radial-gradient(190px circle at var(--mx) var(--my), rgba(0,0,0,0.96), rgba(0,0,0,0.52) 38%, transparent 72%);
+    }
+
+    [data-testid="stSidebar"] {
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.94), rgba(250,248,242,0.96)),
+            var(--pattern-77-bg) !important;
+        background-size: auto, 520px 292px !important;
+        background-position: center top !important;
+        border-right: 1px solid rgba(216,190,120,0.36);
+        box-shadow: 18px 0 60px rgba(43,33,12,0.08);
+    }
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span {
+        color: #202532;
+    }
+
+    .lux-alpha-hero {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        min-height: 154px;
+        padding: 1.45rem 1.6rem;
+        margin-bottom: 1.45rem;
+        background:
+            linear-gradient(110deg, rgba(255,255,255,0.96), rgba(255,255,255,0.82));
+        background-size: auto;
+        background-position: center;
+        border: 1px solid rgba(216,190,120,0.46);
+        border-radius: 18px;
+        box-shadow: 0 22px 70px rgba(43,33,12,0.12);
+    }
+    .lux-alpha-hero::before {
+        background:
+            linear-gradient(90deg, rgba(255,255,255,0.50), rgba(255,255,255,0.84)),
+            radial-gradient(circle at 92% 28%, rgba(232,87,139,0.12), transparent 18%),
+            radial-gradient(circle at 78% 70%, rgba(46,167,160,0.11), transparent 24%);
+        opacity: 1;
+    }
+    .lux-alpha-logo {
+        width: 92px;
+        height: 92px;
+    }
+    .lux-alpha-kicker {
+        color: #8F6A1F !important;
+        font-size: 0.7rem;
+        font-weight: 800;
+        letter-spacing: 0.22em;
+    }
+    .lux-alpha-title {
+        color: #171923 !important;
+        font-size: 2.1rem;
+        font-weight: 760;
+    }
+    .lux-alpha-subtitle {
+        color: #667085 !important;
+        font-size: 0.95rem;
+        max-width: 820px;
+    }
+    .lux-alpha-badge {
+        background: rgba(255,255,255,0.80);
+        border-color: rgba(216,190,120,0.42);
+        box-shadow: 0 8px 22px rgba(43,33,12,0.07);
+    }
+    .lux-alpha-sidebar-brand {
+        background:
+            linear-gradient(145deg, rgba(255,255,255,0.96), rgba(255,255,255,0.76)),
+            var(--pattern-77-bg);
+        background-size: auto, 420px 236px;
+        border: 1px solid rgba(216,190,120,0.44);
+        border-radius: 16px;
+        box-shadow: 0 14px 42px rgba(43,33,12,0.10);
+    }
+    .lux-alpha-sidebar-brand .lux-alpha-logo {
+        width: 54px;
+        height: 54px;
+    }
+    .lux-alpha-sidebar-title {
+        font-size: 1.05rem;
+        letter-spacing: 0;
+    }
+    .lux-alpha-sidebar-caption {
+        color: #7A6170 !important;
+    }
+    .stButton > button {
+        min-height: 2.7rem;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,252,244,0.92));
+        border: 1px solid rgba(216,190,120,0.52);
+        border-radius: 14px;
+        color: #202532;
+        font-weight: 700;
+        box-shadow: 0 12px 30px rgba(43,33,12,0.10);
+    }
+    .stButton > button:hover {
+        background:
+            linear-gradient(90deg, rgba(232,87,139,0.10), rgba(74,144,217,0.10), rgba(125,203,109,0.10)),
+            #FFFFFF;
+        color: #8F6A1F;
+        border-color: #D9A441;
+        box-shadow: 0 16px 42px rgba(216,164,65,0.18);
+    }
+
+    .stTextInput > div > div > input,
+    .stNumberInput > div > div > input,
+    .stDateInput > div > div > input,
+    .stSelectbox > div > div > div {
+        min-height: 2.55rem;
+        background: rgba(255,255,255,0.90);
+        border: 1px solid rgba(216,190,120,0.36);
+        border-radius: 12px;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.9);
+    }
+    .stTextInput > div > div > input:focus,
+    .stNumberInput > div > div > input:focus,
+    .stDateInput > div > div > input:focus {
+        border-color: #E8578B;
+        box-shadow: 0 0 0 3px rgba(232,87,139,0.12);
+    }
+
+    [data-testid="stFileUploader"] {
+        border-radius: 16px;
+        border: 1.5px dashed rgba(216,190,120,0.64);
+        background:
+            linear-gradient(135deg, rgba(255,255,255,0.86), rgba(255,252,244,0.76)),
+            radial-gradient(circle at 16% 16%, rgba(232,87,139,0.12), transparent 22%),
+            radial-gradient(circle at 88% 30%, rgba(74,144,217,0.10), transparent 18%);
+    }
+    [data-testid="stPlotlyChart"],
+    [data-testid="stTable"],
+    [data-testid="stDataFrame"],
+    [data-testid="stExpander"],
+    [data-testid="stMetric"] {
+        background:
+            linear-gradient(145deg, rgba(255,255,255,0.95), rgba(255,255,255,0.82));
+        border: 1px solid rgba(216,190,120,0.30);
+        border-radius: 16px;
+        box-shadow: var(--shadow-card);
+        backdrop-filter: blur(10px);
+    }
+    [data-testid="stMetric"] {
+        border-left-width: 5px;
+    }
+    [data-testid="stMetric"]:nth-child(6n+1) { border-left-color: #E8578B; }
+    [data-testid="stMetric"]:nth-child(6n+2) { border-left-color: #4A90D9; }
+    [data-testid="stMetric"]:nth-child(6n+3) { border-left-color: #7DCB6D; }
+    [data-testid="stMetric"]:nth-child(6n+4) { border-left-color: #D9A441; }
+    [data-testid="stMetric"]:nth-child(6n+5) { border-left-color: #7B61C9; }
+    [data-testid="stMetric"]:nth-child(6n+0) { border-left-color: #2EA7A0; }
+
+    .stTabs [data-baseweb="tab-list"] {
+        border-bottom-color: rgba(216,190,120,0.34);
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 12px 12px 0 0;
+        color: #667085;
+    }
+    .stTabs [aria-selected="true"] {
+        color: #202532;
+        border-bottom: 3px solid #E8578B;
+        background: linear-gradient(90deg, rgba(232,87,139,0.08), rgba(74,144,217,0.08));
+    }
+    [data-testid="stAlert"] {
+        border-radius: 18px;
+        border: 1px solid rgba(216,164,65,0.32);
+        box-shadow: 0 14px 42px rgba(43,33,12,0.08);
+        backdrop-filter: blur(10px);
+    }
+    [data-testid="stSuccess"] {
+        min-height: 4.8rem;
+        align-items: center;
+        background:
+            linear-gradient(90deg, rgba(125,203,109,0.18), rgba(46,167,160,0.12), rgba(255,255,255,0.72)) !important;
+        background-size: auto !important;
+        border: 1px solid rgba(125,203,109,0.28) !important;
+        border-radius: 18px !important;
+        box-shadow: 0 16px 48px rgba(46,167,160,0.10);
+        color: #172033 !important;
+    }
+    [data-testid="stSuccess"] div,
+    [data-testid="stSuccess"] p {
+        color: #172033 !important;
+        font-size: 1.02rem;
+        font-weight: 650;
+    }
+    [data-testid="stInfo"] {
+        background:
+            linear-gradient(90deg, rgba(74,144,217,0.14), rgba(255,255,255,0.74)) !important;
+        background-size: auto !important;
+        border-color: rgba(74,144,217,0.26) !important;
+        border-radius: 18px !important;
+    }
+    [data-testid="stWarning"] {
+        background:
+            linear-gradient(90deg, rgba(217,164,65,0.18), rgba(255,255,255,0.74)) !important;
+        background-size: auto !important;
+        border-color: rgba(217,164,65,0.34) !important;
+        border-radius: 18px !important;
+    }
+    [data-testid="stError"] {
+        background:
+            linear-gradient(90deg, rgba(232,87,139,0.16), rgba(255,255,255,0.74)) !important;
+        background-size: auto !important;
+        border-color: rgba(232,87,139,0.30) !important;
+        border-radius: 18px !important;
+    }
+    [data-testid="stPlotlyChart"] {
+        position: relative;
+        padding: 1.1rem;
+        overflow: hidden;
+    }
+    [data-testid="stPlotlyChart"]::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        border-radius: 16px;
+        background:
+            linear-gradient(90deg, rgba(232,87,139,0.05), transparent 30%, rgba(74,144,217,0.05));
+        background-size: auto;
+        opacity: 0.18;
+    }
+    [data-testid="stPlotlyChart"] > div {
+        position: relative;
+        z-index: 1;
+    }
+    [data-testid="stTable"],
+    [data-testid="stDataFrame"] {
+        border-radius: 18px !important;
+        border: 1px solid rgba(216,164,65,0.32) !important;
+        box-shadow: 0 16px 46px rgba(43,33,12,0.08) !important;
+        background:
+            linear-gradient(145deg, rgba(255,255,255,0.96), rgba(255,255,255,0.82)) !important;
+    }
+    .stTable thead th,
+    [data-testid="stDataFrame"] thead th {
+        background: linear-gradient(90deg, rgba(232,87,139,0.08), rgba(74,144,217,0.08), rgba(125,203,109,0.06)) !important;
+        color: #202532 !important;
+        border-bottom: 1px solid rgba(216,164,65,0.22) !important;
+    }
+    .stTable tbody tr:nth-child(even),
+    [data-testid="stDataFrame"] tbody tr:nth-child(even) {
+        background: rgba(250,248,242,0.55) !important;
+    }
+    .stTable tbody td,
+    [data-testid="stDataFrame"] tbody td {
+        border-bottom: 1px solid rgba(216,164,65,0.12) !important;
+    }
+    #interactive-77-bg {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        overflow: hidden;
+        --logo-x: 0px;
+        --logo-y: 0px;
+        --logo-spin: 0deg;
+        --logo-hue: 0deg;
+        --logo-energy: 0;
+    }
+    .interactive-77-core {
+        position: absolute;
+        left: 58%;
+        top: 54%;
+        width: clamp(220px, 24vw, 430px);
+        height: clamp(220px, 24vw, 430px);
+        transform:
+            translate(calc(-50% + var(--logo-x)), calc(-50% + var(--logo-y)))
+            rotate(var(--logo-spin))
+            scale(calc(1 + var(--logo-energy) * 0.035));
+        opacity: calc(0.13 + var(--logo-energy) * 0.13);
+        filter:
+            hue-rotate(var(--logo-hue))
+            saturate(calc(1.02 + var(--logo-energy) * 0.9))
+            drop-shadow(0 26px 46px rgba(216,164,65,0.12));
+        transition: opacity 180ms ease;
+        mix-blend-mode: multiply;
+    }
+    .interactive-77-core .split-a {
+        transform: translate(calc(var(--logo-energy) * -9px), calc(var(--logo-energy) * 5px));
+        transform-origin: 45% 50%;
+    }
+    .interactive-77-core .split-b {
+        transform: translate(calc(var(--logo-energy) * 9px), calc(var(--logo-energy) * -4px));
+        transform-origin: 55% 50%;
+    }
+    .interactive-77-orbit {
+        position: absolute;
+        width: 46px;
+        height: 46px;
+        opacity: calc(0.16 + var(--logo-energy) * 0.18);
+        filter: hue-rotate(var(--logo-hue)) saturate(1.2);
+        transform:
+            translate(
+                calc(var(--ox) + var(--logo-x) * var(--move)),
+                calc(var(--oy) + var(--logo-y) * var(--move))
+            )
+            rotate(calc(var(--logo-spin) * var(--spin)))
+            scale(calc(1 + var(--logo-energy) * 0.08));
+        mix-blend-mode: multiply;
+    }
+    .interactive-77-orbit.o1 { left: 44%; top: 38%; --ox: -80px; --oy: -44px; --move: -0.42; --spin: 2.2; color: #E8578B; }
+    .interactive-77-orbit.o2 { left: 66%; top: 38%; --ox: 86px; --oy: -36px; --move: 0.34; --spin: -1.8; color: #4A90D9; }
+    .interactive-77-orbit.o3 { left: 45%; top: 69%; --ox: -92px; --oy: 54px; --move: 0.28; --spin: -1.4; color: #7DCB6D; }
+    .interactive-77-orbit.o4 { left: 67%; top: 68%; --ox: 86px; --oy: 48px; --move: -0.36; --spin: 1.6; color: #D9A441; }
+    @media (max-width: 768px) {
+        .interactive-77-core {
+            left: 58%;
+            top: 58%;
+            width: 240px;
+            height: 240px;
+            opacity: calc(0.08 + var(--logo-energy) * 0.10);
+        }
+        .interactive-77-orbit { display: none; }
+    }
+    hr {
+        background: linear-gradient(90deg, transparent, rgba(216,164,65,0.34), rgba(232,87,139,0.20), rgba(74,144,217,0.18), transparent);
     }
 
     /* ── Responsive ── */
     @media (max-width: 768px) {
         .main .block-container { padding: 1rem; }
         .stPlotlyChart { padding: 0.5rem; margin: 0.5rem 0; }
+        h1 { font-size: 1.6rem !important; }
+        h2 { font-size: 1.2rem !important; }
+        .lux-alpha-hero {
+            grid-template-columns: 1fr;
+            padding: 1rem;
+        }
+        .lux-alpha-badges {
+            justify-content: flex-start;
+            min-width: 0;
+        }
+        .lux-alpha-title { font-size: 1.55rem; }
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ═══════════════════════════════════════════════
-# Interactive 3D background — frosted glass + sphere
-# ═══════════════════════════════════════════════
 st.markdown("""
-<canvas id="bg-sphere-canvas" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;display:block;pointer-events:auto;"></canvas>
+<div id="pattern-hover-layer" aria-hidden="true"></div>
 <script>
 (function(){
-    /* ── Load Three.js from multiple CDN fallbacks ── */
-    var CDNS = [
-        'https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js',
-        'https://cdn.bootcdn.net/ajax/libs/three.js/r128/three.min.js',
-        'https://unpkg.com/three@0.157.0/build/three.min.js'
-    ];
-    var cdnIdx = 0;
-    function tryLoad() {
-        if (cdnIdx >= CDNS.length) { console.warn('Three.js failed to load from all CDNs'); return; }
-        var s = document.createElement('script');
-        s.src = CDNS[cdnIdx];
-        s.onload = init;
-        s.onerror = function() { cdnIdx++; tryLoad(); };
-        document.head.appendChild(s);
+  if (window.__pattern77HoverInstalled) return;
+  window.__pattern77HoverInstalled = true;
+  function update(e) {
+    var p = e.touches && e.touches[0] ? e.touches[0] : e;
+    document.documentElement.style.setProperty("--mx", p.clientX + "px");
+    document.documentElement.style.setProperty("--my", p.clientY + "px");
+  }
+  window.addEventListener("mousemove", update, {passive:true});
+  window.addEventListener("touchmove", update, {passive:true});
+})();
+</script>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<div id="interactive-77-bg" aria-hidden="true">
+  <svg class="interactive-77-core" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="interactive-frame" x1="42" y1="42" x2="470" y2="470" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#FFE9A6"/>
+        <stop offset="0.45" stop-color="#C99A3A"/>
+        <stop offset="1" stop-color="#8F6A1F"/>
+      </linearGradient>
+    </defs>
+    <rect x="42" y="42" width="428" height="428" rx="72" fill="#FFFFFF" stroke="url(#interactive-frame)" stroke-width="7"/>
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <g class="split-a">
+        <path d="M126 142H258L148 370" stroke="#E8578B" stroke-width="44"/>
+        <path d="M126 142H258" stroke="#D9A441" stroke-width="44"/>
+        <path d="M148 370L206 250" stroke="#7B61C9" stroke-width="44"/>
+      </g>
+      <g class="split-b">
+        <path d="M250 142H382L272 370" stroke="#4A90D9" stroke-width="44"/>
+        <path d="M250 142H382" stroke="#202532" stroke-width="44"/>
+        <path d="M272 370L326 258" stroke="#7DCB6D" stroke-width="44"/>
+      </g>
+      <path d="M126 142H258L148 370" stroke="#FFFFFF" stroke-width="16"/>
+      <path d="M250 142H382L272 370" stroke="#FFFFFF" stroke-width="16"/>
+      <path d="M146 318C204 284 276 294 360 222" stroke="#2EA7A0" stroke-width="10"/>
+    </g>
+    <circle cx="126" cy="142" r="9" fill="#E8578B"/>
+    <circle cx="258" cy="142" r="9" fill="#4A90D9"/>
+    <circle cx="382" cy="142" r="9" fill="#7DCB6D"/>
+    <circle cx="360" cy="222" r="9" fill="#F0985C"/>
+    <path d="M416 96l9 20 20 9-20 9-9 20-9-20-20-9 20-9z" fill="#D9A441"/>
+    <path d="M96 380l8 18 18 8-18 8-8 18-8-18-18-8 18-8z" fill="#7B61C9"/>
+  </svg>
+  <svg class="interactive-77-orbit o1" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+    <path d="M60 16c10 18 10 30 0 44-10-14-10-26 0-44Z" fill="currentColor"/>
+    <path d="M104 60c-18 10-30 10-44 0 14-10 26-10 44 0Z" fill="currentColor"/>
+    <path d="M60 104c-10-18-10-30 0-44 10 14 10 26 0 44Z" fill="currentColor"/>
+    <path d="M16 60c18-10 30-10 44 0-14 10-26 10-44 0Z" fill="currentColor"/>
+  </svg>
+  <svg class="interactive-77-orbit o2" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="35" cy="35" r="8" fill="currentColor"/><circle cx="85" cy="35" r="8" fill="currentColor"/><circle cx="85" cy="85" r="8" fill="currentColor"/><circle cx="35" cy="85" r="8" fill="currentColor"/>
+  </svg>
+  <svg class="interactive-77-orbit o3" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+    <rect x="48" y="48" width="24" height="24" rx="8" fill="none" stroke="currentColor" stroke-width="7" transform="rotate(45 60 60)"/>
+    <circle cx="28" cy="60" r="7" fill="currentColor"/><circle cx="60" cy="28" r="7" fill="currentColor"/><circle cx="92" cy="60" r="7" fill="currentColor"/><circle cx="60" cy="92" r="7" fill="currentColor"/>
+  </svg>
+  <svg class="interactive-77-orbit o4" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+    <path d="M60 14l12 32 34 14-34 14-12 32-12-32-34-14 34-14z" fill="currentColor"/>
+  </svg>
+</div>
+<script>
+(function(){
+  if (window.__interactive77Installed) return;
+  window.__interactive77Installed = true;
+  var root = document.getElementById("interactive-77-bg") || document.documentElement;
+  if (root && window.getComputedStyle(root).display === "none") return;
+  var targetX = 0, targetY = 0, x = 0, y = 0, energy = 0, hue = 0;
+  function updateTarget(clientX, clientY) {
+    var vw = window.innerWidth || 1;
+    var vh = window.innerHeight || 1;
+    var cx = vw * 0.58;
+    var cy = vh * 0.54;
+    var dx = clientX - cx;
+    var dy = clientY - cy;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    var radius = Math.max(260, Math.min(vw, vh) * 0.42);
+    var pull = Math.max(0, 1 - dist / radius);
+    targetX = Math.max(-28, Math.min(28, dx * 0.045));
+    targetY = Math.max(-24, Math.min(24, dy * 0.04));
+    energy = pull;
+    hue = (clientX / vw * 88) - 28;
+  }
+  window.addEventListener("mousemove", function(e){ updateTarget(e.clientX, e.clientY); }, {passive:true});
+  window.addEventListener("touchmove", function(e){
+    if (e.touches && e.touches[0]) updateTarget(e.touches[0].clientX, e.touches[0].clientY);
+  }, {passive:true});
+  function tick() {
+    x += (targetX - x) * 0.08;
+    y += (targetY - y) * 0.08;
+    var spin = (x * 0.18) + (y * -0.12);
+    root.style.setProperty("--logo-x", x.toFixed(2) + "px");
+    root.style.setProperty("--logo-y", y.toFixed(2) + "px");
+    root.style.setProperty("--logo-spin", spin.toFixed(2) + "deg");
+    root.style.setProperty("--logo-hue", hue.toFixed(2) + "deg");
+    root.style.setProperty("--logo-energy", energy.toFixed(3));
+    requestAnimationFrame(tick);
+  }
+  tick();
+})();
+</script>
+""", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════
+# Interactive Canvas 2D background · subtle ambient sphere
+# Zero external dependencies — works in China
+# ═══════════════════════════════════════════════
+st.markdown("""
+<canvas id="bg-canvas" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;display:block;pointer-events:auto;"></canvas>
+<script>
+(function(){
+    var c = document.getElementById('bg-canvas');
+    if (!c || window.getComputedStyle(c).display === "none") return;
+    var ctx = c.getContext('2d');
+    var W, H, cx, cy, R;
+    var t = 0;
+    var mouse = {x: -9999, y: -9999, active: false};
+    var mouseSmooth = {x: -9999, y: -9999, active: 0};
+
+    /* ── Simplex 3D noise (compact) ── */
+    var grad3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+    var perm = new Uint8Array(512);
+    var p = [151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,74,165,71,134,139,48,27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,102,143,54,65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,200,196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,52,217,226,250,124,123,5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,189,28,42,223,183,170,213,119,248,152,2,44,154,163,70,221,153,101,155,167,43,172,9,129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,104,218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,241,81,51,145,235,249,14,239,107,49,192,214,31,181,199,106,157,184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180];
+    for(var i=0;i<512;i++){perm[i]=p[i&255];}
+    function dot3(g,x,y,z){return g[0]*x+g[1]*y+g[2]*z;}
+    function snoise(x,y,z){
+        var X=Math.floor(x)&255,Y=Math.floor(y)&255,Z=Math.floor(z)&255;
+        x-=Math.floor(x);y-=Math.floor(y);z-=Math.floor(z);
+        var u=x*x*x*(x*(x*6-15)+10),v=y*y*y*(y*(y*6-15)+10),w=z*z*z*(z*(z*6-15)+10);
+        var A=perm[X]+Y,AA=perm[A]+Z,AB=perm[A+1]+Z;
+        var B=perm[X+1]+Y,BA=perm[B]+Z,BB=perm[B+1]+Z;
+        return (1-u)*(1-v)*(1-w)*dot3(grad3[perm[AA]%12],x,y,z)+
+               (1-u)*(1-v)*w*dot3(grad3[perm[AB]%12],x,y,z-1)+
+               (1-u)*v*(1-w)*dot3(grad3[perm[AA+1]%12],x,y-1,z)+
+               (1-u)*v*w*dot3(grad3[perm[AB+1]%12],x,y-1,z-1)+
+               u*(1-v)*(1-w)*dot3(grad3[perm[BA]%12],x-1,y,z)+
+               u*(1-v)*w*dot3(grad3[perm[BB]%12],x-1,y,z-1)+
+               u*v*(1-w)*dot3(grad3[perm[BA+1]%12],x-1,y-1,z)+
+               u*v*w*dot3(grad3[perm[BB+1]%12],x-1,y-1,z-1);
     }
-    tryLoad();
 
-    function init() {
-        if (typeof THREE === 'undefined') { setTimeout(init, 200); return; }
+    /* ── HSL → RGB ── */
+    function hsl(h,s,l){
+        var a=s*Math.min(l,1-l);
+        var f=function(n){var k=(n+h/30)%12;return l-a*Math.max(Math.min(k-3,9-k,1),-1);};
+        return [Math.round(f(0)*255),Math.round(f(8)*255),Math.round(f(4)*255)];
+    }
 
-        var canvas = document.getElementById('bg-sphere-canvas');
-        var renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setClearColor(0x000000, 0.0);
+    /* ── Offscreen noise texture (256×256) ── */
+    var texSize = 256;
+    var offC = document.createElement('canvas');
+    offC.width = offC.height = texSize;
+    var offX = offC.getContext('2d');
+    var imgData = offX.createImageData(texSize, texSize);
+    for(var iy=0;iy<texSize;iy++){
+        for(var ix=0;ix<texSize;ix++){
+            var n = snoise(ix*0.04, iy*0.04, 0)*0.5+0.5;
+            var v = Math.floor(n*255);
+            var idx = (iy*texSize+ix)*4;
+            imgData.data[idx]=imgData.data[idx+1]=imgData.data[idx+2]=v;
+            imgData.data[idx+3]=255;
+        }
+    }
+    offX.putImageData(imgData,0,0);
 
-        var scene = new THREE.Scene();
-        var camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.5, 20);
-        camera.position.z = 6.5;
+    function resize(){
+        W = c.width = window.innerWidth;
+        H = c.height = window.innerHeight;
+        cx = W/2; cy = H/2;
+        R = Math.min(W, H) * 0.32;
+    }
+    resize();
+    window.addEventListener('resize', resize);
 
-        /* ── GLSL simplex noise ── */
-        var noiseGLSL = `
-vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
-vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
-vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
-vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
-float snoise(vec3 v){
-  const vec2 C=vec2(0.1666666667,0.3333333333);
-  vec3 i=floor(v+dot(v,C.yyy));
-  vec3 x0=v-i+dot(i,C.xxx);
-  vec3 g=step(x0.yzx,x0.xyz);
-  vec3 l=1.0-g;
-  vec3 i1=min(g.xyz,l.zxy);
-  vec3 i2=max(g.xyz,l.zxy);
-  vec3 x1=x0-i1+C.xxx;
-  vec3 x2=x0-i2+C.yyy;
-  vec3 x3=x0-0.5;
-  i=mod289(i);
-  vec4 p=permute(permute(permute(i.z+vec4(0.0,i1.z,i2.z,1.0))+i.y+vec4(0.0,i1.y,i2.y,1.0))+i.x+vec4(0.0,i1.x,i2.x,1.0));
-  float n_=0.142857142857;
-  vec3 ns=n_*(1.0/3.0)-vec3(0.1666666667);
-  vec4 j=p-49.0*floor(p*ns.z*ns.z);
-  vec4 x_=floor(j*ns.z);
-  vec4 y_=floor(j-7.0*x_);
-  vec4 x=x_*ns.x+vec4(0.0,1.0,1.0,1.0);
-  vec4 y=y_*ns.y+vec4(0.0,1.0,1.0,1.0);
-  vec4 h=1.0-abs(x)-abs(y);
-  vec4 b0=vec4(x.xy,y.xy);
-  vec4 b1=vec4(x.zw,y.zw);
-  vec4 s0=floor(b0)*2.0+1.0;
-  vec4 s1=floor(b1)*2.0+1.0;
-  vec4 sh=-step(h,vec4(0.0));
-  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;
-  vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
-  vec3 p0=vec3(a0.xy,h.x);
-  vec3 p1=vec3(a0.zw,h.y);
-  vec3 p2=vec3(a1.xy,h.z);
-  vec3 p3=vec3(a1.zw,h.w);
-  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
-  p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
-  vec4 m=max(0.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0);
-  m=m*m;
-  return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
-}`;
+    /* ── Mouse / touch ── */
+    function onMove(e){
+        mouse.x = e.clientX; mouse.y = e.clientY; mouse.active = true;
+    }
+    function onLeave(){ mouse.active = false; }
+    function onTouch(e){
+        if(e.touches.length>0){mouse.x=e.touches[0].clientX;mouse.y=e.touches[0].clientY;mouse.active=true;}
+    }
+    function onTouchEnd(){ mouse.active = false; }
+    window.addEventListener('mousemove', onMove, {passive:true});
+    window.addEventListener('mouseleave', onLeave);
+    window.addEventListener('touchmove', onTouch, {passive:true});
+    window.addEventListener('touchend', onTouchEnd);
 
-        /* ── Shader uniforms ── */
-        var uniforms = {
-            uTime: { value: 0 },
-            uMouse3D: { value: new THREE.Vector3(99, 99, 99) },
-            uMouseActive: { value: 0 },
-        };
+    /* ── Ray-sphere intersection ── */
+    function raySphere(mx, my){
+        var dx = (mx - cx) / R;
+        var dy = (my - cy) / R;
+        var d2 = dx*dx + dy*dy;
+        if(d2 <= 1.0){
+            var dz = Math.sqrt(1.0 - d2);
+            return {x: dx, y: dy, z: dz, hit: true};
+        }
+        // Find closest point on sphere
+        var dist = Math.sqrt(d2);
+        return {x: dx/dist, y: dy/dist, z: 0, hit: false};
+    }
 
-        var vertexShader = noiseGLSL + `
-varying vec3 vNormal;
-varying vec3 vPosition;
-varying float vDisplacement;
-varying vec3 vWorldNormal;
-uniform float uTime;
-uniform vec3 uMouse3D;
-uniform float uMouseActive;
+    function render(ts){
+        t = ts * 0.001;
+        ctx.clearRect(0, 0, W, H);
 
-void main() {
-    float n1 = snoise(position * 2.2 + uTime * 0.35);
-    float n2 = snoise(position * 4.5 - uTime * 0.25) * 0.55;
-    float n3 = snoise(position * 7.0 + uTime * 0.45) * 0.3;
-    float displacement = (n1 + n2 + n3) * 0.04;
+        /* Smooth mouse */
+        var mx = mouseSmooth.x + (mouse.x - mouseSmooth.x) * 0.12;
+        var my = mouseSmooth.y + (mouse.y - mouseSmooth.y) * 0.12;
+        var ma = mouseSmooth.active + ((mouse.active?1:0) - mouseSmooth.active) * 0.08;
+        mouseSmooth.x = mx; mouseSmooth.y = my; mouseSmooth.active = ma;
 
-    /* Mouse turbulence */
-    float dist = length(position - uMouse3D);
-    float influence = exp(-dist * 2.8) * uMouseActive;
-    float turb = (sin(dist * 14.0 - uTime * 10.0) * 0.5
-                + sin(dist * 9.0 + uTime * 7.0) * 0.35
-                + cos(dist * 18.0 - uTime * 7.0) * 0.25) * influence * 0.12;
-    displacement += turb;
+        var hit = raySphere(mx, my);
 
-    vec3 newPos = position + normal * displacement;
-    vDisplacement = displacement;
-    vNormal = normalize(normalMatrix * normal);
-    vWorldNormal = normal;
-    vPosition = position;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(newPos, 1.0);
-}`;
+        /* ── Draw sphere ── */
+        ctx.save();
+        /* Subtle radial glow behind sphere */
+        var glowGrad = ctx.createRadialGradient(cx, cy, R*0.88, cx, cy, R*1.25);
+        var baseHue = 215 + Math.sin(t*0.12)*8 + Math.cos(t*0.17)*6;
+        var glowRGB = hsl(baseHue%360, 0.40, 0.62);
+        glowGrad.addColorStop(0, 'rgba('+glowRGB[0]+','+glowRGB[1]+','+glowRGB[2]+',0.08)');
+        glowGrad.addColorStop(0.5, 'rgba('+glowRGB[0]+','+glowRGB[1]+','+glowRGB[2]+',0.03)');
+        glowGrad.addColorStop(1, 'rgba('+glowRGB[0]+','+glowRGB[1]+','+glowRGB[2]+',0)');
+        ctx.fillStyle = glowGrad;
+        ctx.beginPath(); ctx.arc(cx, cy, R*1.25, 0, Math.PI*2); ctx.fill();
 
-        var fragmentShader = `
-varying vec3 vNormal;
-varying vec3 vPosition;
-varying float vDisplacement;
-varying vec3 vWorldNormal;
-uniform float uTime;
-uniform vec3 uMouse3D;
-uniform float uMouseActive;
+        /* Sphere body: noise-textured warm gradient */
+        ctx.save();
+        ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI*2); ctx.clip();
 
-vec3 hsv2rgb(vec3 c) {
-    vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
-    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
+        /* Base gradient */
+        var baseGrad = ctx.createRadialGradient(cx-R*0.3, cy-R*0.45, R*0.05, cx, cy, R*1.05);
+        var h0 = (215 + Math.sin(t*0.12)*8)%360;
+        var h1 = (225 + Math.cos(t*0.17)*6)%360;
+        var c0 = hsl(h0, 0.35, 0.75);
+        var c1 = hsl(h1, 0.30, 0.62);
+        baseGrad.addColorStop(0, 'rgb('+c0[0]+','+c0[1]+','+c0[2]+')');
+        baseGrad.addColorStop(0.45, 'rgb('+Math.floor((c0[0]+c1[0])/2)+','+Math.floor((c0[1]+c1[1])/2)+','+Math.floor((c0[2]+c1[2])/2)+')');
+        baseGrad.addColorStop(1, 'rgb('+c1[0]+','+c1[1]+','+c1[2]+')');
+        ctx.fillStyle = baseGrad;
+        ctx.fillRect(cx-R, cy-R, R*2, R*2);
 
-void main() {
-    /* Base warm-red, slowly drifting hue */
-    float hue = 0.985 + sin(uTime * 0.18) * 0.05 + cos(uTime * 0.23) * 0.04 + sin(uTime * 0.09) * 0.03;
-    float sat = 0.70 + sin(uTime * 0.31) * 0.14;
-    float val = 0.72 + sin(uTime * 0.22) * 0.10;
-    vec3 baseColor = hsv2rgb(vec3(fract(hue), sat, val));
+        /* Noise texture overlay */
+        ctx.globalAlpha = 0.08;
+        var pat = ctx.createPattern(offC, 'repeat');
+        var noiseScale = 1.8 + Math.sin(t*0.08)*0.3;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(noiseScale, noiseScale);
+        ctx.fillStyle = pat;
+        ctx.fillRect(-R, -R, R*2, R*2);
+        ctx.restore();
+        ctx.globalAlpha = 1.0;
 
-    /* Mouse rainbow */
-    float dist = length(vPosition - uMouse3D);
-    float influence = exp(-dist * 2.5) * uMouseActive;
+        /* ── Mouse turbulence region ── */
+        if(ma > 0.01 && hit.hit){
+            var ix = hit.x * R + cx;
+            var iy = hit.y * R + cy;
+            var turbGrad = ctx.createRadialGradient(ix, iy, 0, ix, iy, R*0.42*ma);
+            var rainbowHue = ((t*25 + hit.x*150 + hit.y*100)%360 + 360)%360;
+            var r0 = hsl(rainbowHue, 0.70, 0.80);
+            var r1 = hsl((rainbowHue+25)%360, 0.65, 0.74);
+            var r2 = hsl((rainbowHue-15)%360, 0.60, 0.70);
+            turbGrad.addColorStop(0, 'rgba('+r0[0]+','+r0[1]+','+r0[2]+','+(0.40*ma)+')');
+            turbGrad.addColorStop(0.35, 'rgba('+r1[0]+','+r1[1]+','+r1[2]+','+(0.22*ma)+')');
+            turbGrad.addColorStop(0.7, 'rgba('+r2[0]+','+r2[1]+','+r2[2]+','+(0.08*ma)+')');
+            turbGrad.addColorStop(1, 'rgba('+r2[0]+','+r2[1]+','+r2[2]+',0)');
+            ctx.fillStyle = turbGrad;
+            ctx.fillRect(cx-R, cy-R, R*2, R*2);
 
-    /* Iridescent rings */
-    float ring1 = exp(-abs(dist - 0.15) * 20.0);
-    float ring2 = exp(-abs(dist - 0.35) * 12.0);
-    float ring3 = exp(-abs(dist - 0.55) * 8.0);
-    float rings = ring1 * 0.7 + ring2 * 0.4 + ring3 * 0.25;
-
-    float rainbowHue = fract(dist * 0.7 - uTime * 0.13 + sin(uTime * 2.0 + dist * 5.0) * 0.1);
-    vec3 rainbowColor = hsv2rgb(vec3(rainbowHue, 0.82, 0.92));
-    vec3 color = mix(baseColor, rainbowColor, influence * 0.65);
-    color = mix(color, rainbowColor * 1.3, rings * influence);
-
-    /* Fresnel */
-    vec3 viewDir = vec3(0.0, 0.0, 1.0);
-    float fresnel = pow(1.0 - abs(dot(vWorldNormal, viewDir)), 3.5);
-    vec3 edgeColor = hsv2rgb(vec3(fract(hue + 0.08), 0.5, 0.85));
-    color = mix(color, edgeColor, fresnel * 0.28);
-
-    /* Lighting */
-    vec3 lightDir = normalize(vec3(0.8, 0.6, 1.2));
-    float diffuse = dot(vWorldNormal, lightDir) * 0.5 + 0.5;
-    float specular = pow(max(dot(reflect(-lightDir, vWorldNormal), viewDir), 0.0), 32.0) * 0.2;
-    color *= (0.50 + diffuse * 0.58 + specular * 0.55);
-
-    /* Surface noise detail */
-    color += vDisplacement * 2.5;
-    float edgeFade = 1.0 - fresnel * 0.12;
-    color *= edgeFade;
-
-    gl_FragColor = vec4(color, 1.0);
-}`;
-
-        /* ── Build sphere ── */
-        var geometry = new THREE.SphereGeometry(1.6, 96, 96);
-        var material = new THREE.ShaderMaterial({
-            uniforms: uniforms,
-            vertexShader: vertexShader,
-            fragmentShader: fragmentShader,
-        });
-        var sphere = new THREE.Mesh(geometry, material);
-        scene.add(sphere);
-
-        /* ── Mouse tracking ── */
-        var mouse = new THREE.Vector2();
-        var raycaster = new THREE.Raycaster();
-        var mouse3DTarget = new THREE.Vector3(99, 99, 99);
-        var mouseActiveTarget = 0;
-        var lastRaycast = 0;
-
-        function updateMouse(event) {
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-            var now = performance.now() * 0.001;
-            if (now - lastRaycast < 0.03) return;
-            lastRaycast = now;
-            raycaster.setFromCamera(mouse, camera);
-            var intersects = raycaster.intersectObject(sphere);
-            if (intersects.length > 0) {
-                mouse3DTarget.copy(intersects[0].point);
-                sphere.worldToLocal(mouse3DTarget);
-                mouseActiveTarget = 1.0;
-            } else {
-                mouseActiveTarget = 0.0;
+            /* Rainbow ring ripples */
+            for(var ri=0;ri<3;ri++){
+                var rad = (0.12+ri*0.18) * R;
+                var alpha = (0.45-ri*0.14) * ma;
+                ctx.strokeStyle = 'rgba('+r0[0]+','+r0[1]+','+r0[2]+','+alpha+')';
+                ctx.lineWidth = 2.5-ri*0.6;
+                ctx.beginPath(); ctx.arc(ix, iy, rad, 0, Math.PI*2); ctx.stroke();
             }
         }
 
-        window.addEventListener('mousemove', updateMouse, { passive: true });
-        window.addEventListener('touchmove', function(e) {
-            if (e.touches.length > 0) updateMouse({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY });
-        }, { passive: true });
-        window.addEventListener('touchend', function() { mouseActiveTarget = 0.0; });
-        window.addEventListener('mouseleave', function() { mouseActiveTarget = 0.0; });
-        window.addEventListener('resize', function() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+        /* ── Surface detail: subtle radial gradients for 3D depth ── */
+        /* Highlight */
+        var hlGrad = ctx.createRadialGradient(cx-R*0.35, cy-R*0.45, R*0.02, cx, cy, R);
+        hlGrad.addColorStop(0, 'rgba(255,255,255,0.14)');
+        hlGrad.addColorStop(0.3, 'rgba(255,255,255,0.04)');
+        hlGrad.addColorStop(1, 'rgba(0,0,0,0.08)');
+        ctx.fillStyle = hlGrad;
+        ctx.fillRect(cx-R, cy-R, R*2, R*2);
 
-        /* ── Render loop ── */
-        var clock = new THREE.Clock();
-        function animate() {
-            requestAnimationFrame(animate);
-            var dt = Math.min(clock.getDelta(), 0.1);
-            uniforms.uTime.value += dt;
-            uniforms.uMouse3D.value.lerp(mouse3DTarget, 0.10);
-            uniforms.uMouseActive.value += (mouseActiveTarget - uniforms.uMouseActive.value) * 0.07;
-            sphere.rotation.y += dt * 0.06;
-            sphere.rotation.x += dt * 0.025;
-            renderer.render(scene, camera);
+        /* Fresnel rim */
+        var rimGrad = ctx.createRadialGradient(cx, cy, R*0.82, cx, cy, R*1.02);
+        rimGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        rimGrad.addColorStop(0.7, 'rgba(0,0,0,0)');
+        rimGrad.addColorStop(1, 'rgba(0,0,0,0.12)');
+        ctx.fillStyle = rimGrad;
+        ctx.fillRect(cx-R, cy-R, R*2, R*2);
+
+        ctx.restore(); /* End sphere clip */
+
+        /* ── Idle noise speckle particles (reduced) ── */
+        for(var pi=0;pi<10;pi++){
+            var angle = (pi/18)*Math.PI*2 + t*0.15;
+            var dist = R*(0.92+0.08*Math.sin(pi*7.3+t*1.4));
+            var sx = cx + Math.cos(angle)*dist;
+            var sy = cy + Math.sin(angle)*dist*0.7;
+            var speckleAlpha = 0.08+0.06*Math.sin(pi*3.7+t*2.1);
+            var spHue = (h0+pi*30+Math.sin(t*0.5+pi)*12)%360;
+            var spRGB = hsl(spHue, 0.35, 0.72);
+            ctx.fillStyle = 'rgba('+spRGB[0]+','+spRGB[1]+','+spRGB[2]+','+speckleAlpha+')';
+            ctx.beginPath(); ctx.arc(sx, sy, 2.2, 0, Math.PI*2); ctx.fill();
         }
-        animate();
+
+        ctx.restore(); /* End main save */
+
+        requestAnimationFrame(render);
     }
+    requestAnimationFrame(render);
 })();
 </script>
 """, unsafe_allow_html=True)
@@ -921,7 +1657,35 @@ def get_stock_data(stock_code, start_date, end_date):
         except Exception as e:
             st.write(f"✗ TickFlow 获取数据时出错: {str(e)[:100]}...")
         
-        st.write("已停用 efinance 数据源，继续尝试 yfinance。")
+        # 如果是美股，跳过efinance（只支持A股）
+        if not (stock_code.startswith('6') or stock_code.startswith('5') or 
+                stock_code.startswith('0') or stock_code.startswith('3') or
+                stock_code.startswith('8') or stock_code.startswith('4')):
+            st.write("检测到非A股代码，跳过efinance")
+        else:
+            # 尝试使用efinance获取数据
+            try:
+                def fetch_efinance():
+                    return ef.stock.get_quote_history(stock_code)
+                
+                data = retry_with_backoff(fetch_efinance)
+                
+                data['日期'] = pd.to_datetime(data['日期'])
+                data = data[(data['日期'] >= start_date) & (data['日期'] <= end_date)]
+                data.set_index('日期', inplace=True)
+                
+                data.rename(columns={
+                    '收盘': 'close',
+                    '开盘': 'open',
+                    '最高': 'high',
+                    '最低': 'low',
+                    '成交量': 'volume'
+                }, inplace=True)
+                
+                st.write(f"✓ 使用 efinance 获取到 {len(data)} 条数据")
+                return data
+            except Exception as e:
+                st.write(f"✗ efinance 获取数据时出错: {str(e)[:100]}...")
         
         # 使用yfinance作为备用数据源（禁用缓存以避免权限问题）
         try:
@@ -1010,7 +1774,26 @@ def get_benchmark_data(start_date, end_date):
         except Exception as e:
             st.write(f"✗ TickFlow 获取上证指数时出错: {str(e)[:100]}...")
         
-        st.write("已停用 efinance 上证指数数据源，继续尝试 yfinance。")
+        # 尝试使用 efinance
+        try:
+            def fetch_efinance():
+                return ef.stock.get_quote_history('000001')
+            
+            data = retry_with_backoff(fetch_efinance)
+            
+            data['日期'] = pd.to_datetime(data['日期'])
+            data = data[(data['日期'] >= start_date) & (data['日期'] <= end_date)]
+            data.set_index('日期', inplace=True)
+            
+            data.rename(columns={'收盘': 'close'}, inplace=True)
+            
+            data['benchmark_return'] = data['close'].pct_change()
+            data['cumulative_benchmark'] = (1 + data['benchmark_return']).cumprod()
+            
+            st.write(f"✓ 使用 efinance 获取到 {len(data)} 条上证指数数据")
+            return data
+        except Exception as e:
+            st.write(f"✗ efinance 获取上证指数数据时出错: {str(e)[:100]}...")
         
         # 尝试使用 yfinance
         try:
@@ -1080,7 +1863,22 @@ def get_stock_name(stock_code):
         except Exception as e:
             st.write(f"✗ TickFlow 获取股票名称时出错: {str(e)[:100]}...")
         
-        st.write("已停用 efinance 股票名称数据源。")
+        # 如果是A股，尝试使用 efinance
+        if stock_code.startswith('6') or stock_code.startswith('5') or \
+           stock_code.startswith('0') or stock_code.startswith('3') or \
+           stock_code.startswith('8') or stock_code.startswith('4'):
+            try:
+                def fetch_efinance():
+                    return ef.stock.get_quote_history(stock_code, klt=1)
+                
+                stock_info = retry_with_backoff(fetch_efinance)
+                if not stock_info.empty:
+                    stock_name = stock_info.get('股票名称', [''])[0] if '股票名称' in stock_info.columns else ""
+                    if stock_name:
+                        st.write(f"股票名称: {stock_name}")
+                    return stock_name
+            except Exception as e:
+                st.write(f"✗ efinance 获取股票名称时出错: {str(e)[:100]}...")
         
         # 对于美股，直接返回股票代码作为名称（避免yfinance缓存权限问题）
         if not (stock_code.startswith('6') or stock_code.startswith('5') or 
@@ -1471,9 +2269,9 @@ def generate_kline_chart(data, stock_code, time_frame='day', show_ma5=False, sho
     data['MA50'] = data['close'].rolling(window=50).mean()
     data['MA100'] = data['close'].rolling(window=100).mean()
     
-    # Apple palette signal colors
-    green = '#34C759'
-    red = '#FF3B30'
+    # Signal colors
+    green = FALL_GREEN
+    red = RISE_RED
 
     # K-line candlestick
     fig = go.Figure(data=[go.Candlestick(
@@ -1492,28 +2290,28 @@ def generate_kline_chart(data, stock_code, time_frame='day', show_ma5=False, sho
     # MA20 (primary)
     fig.add_trace(go.Scatter(
         x=data.index, y=data['MA20'], mode='lines',
-        name='MA20', line=dict(color='#FF9500', width=1.5),
+        name='MA20', line=dict(color=SIGNAL_ORANGE, width=1.5),
     ))
 
     if show_ma5:
         fig.add_trace(go.Scatter(
             x=data.index, y=data['MA5'], mode='lines',
-            name='MA5', line=dict(color='#007AFF', width=1),
+            name='MA5', line=dict(color=SIGNAL_BLUE, width=1),
         ))
     if show_ma10:
         fig.add_trace(go.Scatter(
             x=data.index, y=data['MA10'], mode='lines',
-            name='MA10', line=dict(color='#5AC8FA', width=1),
+            name='MA10', line=dict(color=FALL_GREEN, width=1),
         ))
     if show_ma50:
         fig.add_trace(go.Scatter(
             x=data.index, y=data['MA50'], mode='lines',
-            name='MA50', line=dict(color='#AF52DE', width=1),
+            name='MA50', line=dict(color=SIGNAL_PURPLE, width=1),
         ))
     if show_ma100:
         fig.add_trace(go.Scatter(
             x=data.index, y=data['MA100'], mode='lines',
-            name='MA100', line=dict(color='#6E6E73', width=1),
+            name='MA100', line=dict(color='#A1A1A6', width=1),
         ))
 
     # Buy/Sell markers
@@ -1526,7 +2324,7 @@ def generate_kline_chart(data, stock_code, time_frame='day', show_ma5=False, sho
     if not add_signals.empty:
         fig.add_trace(go.Scatter(
             x=add_signals.index, y=add_signals['close'], mode='markers',
-            name='加仓', marker=dict(color='#FF9500', size=10, symbol='cross',
+            name='加仓', marker=dict(color=SIGNAL_ORANGE, size=10, symbol='cross',
             line=dict(width=1, color='white')),
         ))
     if not sell_signals.empty:
@@ -1538,13 +2336,13 @@ def generate_kline_chart(data, stock_code, time_frame='day', show_ma5=False, sho
     if not buyback_signals.empty:
         fig.add_trace(go.Scatter(
             x=buyback_signals.index, y=buyback_signals['close'], mode='markers',
-            name='买回', marker=dict(color='#5AC8FA', size=10, symbol='circle',
+            name='买回', marker=dict(color=FALL_GREEN, size=10, symbol='circle',
             line=dict(width=1, color='white')),
         ))
     if not stop_loss_signals.empty:
         fig.add_trace(go.Scatter(
             x=stop_loss_signals.index, y=stop_loss_signals['close'], mode='markers',
-            name='止损', marker=dict(color='#FF9500', size=10, symbol='x',
+            name='止损', marker=dict(color=RISE_RED, size=10, symbol='x',
             line=dict(width=1, color='white')),
         ))
 
@@ -1589,20 +2387,21 @@ def generate_volume_chart(data, time_frame='day'):
     colors_scheme = get_color_scheme()
     template = get_plotly_template(colors_scheme)
 
-    data['color'] = ['#FF3B30' if close > open else '#34C759' for close, open in zip(data['close'], data['open'])]
+    data['color'] = [RISE_RED if close > open else FALL_GREEN for close, open in zip(data['close'], data['open'])]
+    data['line_color'] = [RISE_RED_DARK if close > open else FALL_GREEN_DARK for close, open in zip(data['close'], data['open'])]
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=data.index, y=data['volume'], name='成交量',
-        marker=dict(color=data['color'], opacity=0.25),
+        marker=dict(color=data['color'], opacity=0.34, line=dict(color=data['line_color'], width=0.35)),
     ))
     fig.add_trace(go.Scatter(
         x=data.index, y=data['VMA5'], mode='lines', name='VMA5',
-        line=dict(color='#007AFF', width=1.5),
+        line=dict(color=SIGNAL_BLUE, width=1.5),
     ))
     fig.add_trace(go.Scatter(
         x=data.index, y=data['VMA60'], mode='lines', name='VMA60',
-        line=dict(color='#FF9500', width=1.5),
+        line=dict(color=SIGNAL_ORANGE, width=1.5),
     ))
 
     fig.update_layout(**template)
@@ -1610,7 +2409,7 @@ def generate_volume_chart(data, time_frame='day'):
         title='成交量和均量线',
         height=400,
         hovermode='x unified',
-        xaxis_rangeslider_visible=True,
+        xaxis_rangeslider_visible=False,
         xaxis=dict(
             type="category",
             tickmode="array",
@@ -1630,11 +2429,11 @@ def generate_position_chart(data, time_frame='day'):
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=data.index, y=data['position'] * 100, mode='lines',
-        name='仓位 (%)', line=dict(color='#34C759', width=1.5), yaxis='y1',
+        name='仓位 (%)', line=dict(color=FALL_GREEN, width=1.5), yaxis='y1',
     ))
     fig.add_trace(go.Scatter(
         x=data.index, y=(data['cumulative_return'] - 1) * 100, mode='lines',
-        name='策略收益率 (%)', line=dict(color='#007AFF', width=1.5), yaxis='y2',
+        name='策略收益率 (%)', line=dict(color=SIGNAL_BLUE, width=1.5), yaxis='y2',
     ))
 
     fig.update_layout(**template)
@@ -1642,7 +2441,7 @@ def generate_position_chart(data, time_frame='day'):
         title='仓位和策略收益率',
         height=400,
         hovermode='x unified',
-        xaxis_rangeslider_visible=True,
+        xaxis_rangeslider_visible=False,
         yaxis=dict(title='仓位 (%)', side='left', range=[0, 100]),
         yaxis2=dict(title='策略收益率 (%)', side='right', overlaying='y'),
         xaxis=dict(
@@ -1675,17 +2474,17 @@ def generate_indicators_chart(data):
             y=data['MACD'],
             mode='lines',
             name='MACD',
-            line=dict(color='blue', width=1.5)
+            line=dict(color=SIGNAL_BLUE, width=1.5)
         ))
-        
+
         fig.add_trace(go.Scatter(
             x=data.index,
             y=data['Signal'],
             mode='lines',
             name='Signal',
-            line=dict(color='red', width=1.5)
+            line=dict(color=SIGNAL_ORANGE, width=1.5)
         ))
-    
+
     # 添加RSI（如果存在）
     if has_rsi:
         fig.add_trace(go.Scatter(
@@ -1693,7 +2492,7 @@ def generate_indicators_chart(data):
             y=data['RSI'],
             mode='lines',
             name='RSI',
-            line=dict(color='purple', width=1.5),
+            line=dict(color=SIGNAL_PURPLE, width=1.5),
             yaxis='y2'
         ))
     
@@ -1726,7 +2525,7 @@ def generate_indicators_chart(data):
         'modebar': dict(
             orientation="h",
             bgcolor=colors['hover_bg'],
-            activecolor="#007bff",
+            activecolor=RISE_RED,
             color=colors['text_color']
         ),
         # 半透明悬浮窗
@@ -1764,8 +2563,8 @@ def generate_indicators_chart(data):
     
     # 添加RSI超买超卖线（如果RSI存在）
     if has_rsi:
-        fig.add_hline(y=70, line_dash="dash", line_color="red", name="超买线")
-        fig.add_hline(y=30, line_dash="dash", line_color="green", name="超卖线")
+        fig.add_hline(y=70, line_dash="dash", line_color=RISE_RED, name="超买线")
+        fig.add_hline(y=30, line_dash="dash", line_color=FALL_GREEN, name="超卖线")
     
     return fig
 
@@ -1797,7 +2596,7 @@ def generate_simple_combined_chart(data, stock_code):
         y=data['close'],
         mode='lines',
         name='收盘价',
-        line=dict(color='blue', width=1.5)
+        line=dict(color=SIGNAL_BLUE, width=1.5)
     ), row=1, col=1)
     
     # 添加MA25（如果存在）
@@ -1807,7 +2606,7 @@ def generate_simple_combined_chart(data, stock_code):
             y=data['MA25'],
             mode='lines',
             name='MA25',
-            line=dict(color='orange', width=1.5)
+            line=dict(color=SIGNAL_ORANGE, width=1.5)
         ), row=1, col=1)
     
     # 添加买卖信号标记
@@ -1817,43 +2616,43 @@ def generate_simple_combined_chart(data, stock_code):
             y=buy_signals['close'],
             mode='markers',
             name='买入',
-            marker=dict(color='green', size=10, symbol='triangle-up', line=dict(width=2, color='black'))
+            marker=dict(color=FALL_GREEN, size=10, symbol='triangle-up', line=dict(width=2, color='white'))
         ), row=1, col=1)
-    
+
     if not add_signals.empty:
         fig.add_trace(go.Scatter(
             x=add_signals.index,
             y=add_signals['close'],
             mode='markers',
             name='加仓',
-            marker=dict(color='blue', size=10, symbol='cross', line=dict(width=2, color='black'))
+            marker=dict(color=SIGNAL_ORANGE, size=10, symbol='cross', line=dict(width=2, color='white'))
         ), row=1, col=1)
-    
+
     if not sell_signals.empty:
         fig.add_trace(go.Scatter(
             x=sell_signals.index,
             y=sell_signals['close'],
             mode='markers',
             name='卖出',
-            marker=dict(color='red', size=10, symbol='triangle-down', line=dict(width=2, color='black'))
+            marker=dict(color=RISE_RED, size=10, symbol='triangle-down', line=dict(width=2, color='white'))
         ), row=1, col=1)
-    
+
     if not buyback_signals.empty:
         fig.add_trace(go.Scatter(
             x=buyback_signals.index,
             y=buyback_signals['close'],
             mode='markers',
             name='买回',
-            marker=dict(color='yellow', size=10, symbol='circle', line=dict(width=2, color='black'))
+            marker=dict(color=FALL_GREEN, size=10, symbol='circle', line=dict(width=2, color='white'))
         ), row=1, col=1)
-    
+
     if not stop_loss_signals.empty:
         fig.add_trace(go.Scatter(
             x=stop_loss_signals.index,
             y=stop_loss_signals['close'],
             mode='markers',
             name='止损',
-            marker=dict(color='orange', size=10, symbol='x', line=dict(width=2, color='black'))
+            marker=dict(color=RISE_RED, size=10, symbol='x', line=dict(width=2, color='white'))
         ), row=1, col=1)
     
     # 第二行：成交量和均量线
@@ -1862,7 +2661,7 @@ def generate_simple_combined_chart(data, stock_code):
     data['VMA60'] = data['volume'].rolling(window=60).mean()
     
     # 计算涨跌颜色
-    data['color'] = ['red' if close > open else 'green' for close, open in zip(data['close'], data['open'])]
+    data['color'] = [RISE_RED if close > open else FALL_GREEN for close, open in zip(data['close'], data['open'])]
     
     # 添加成交量柱体
     fig.add_trace(go.Bar(
@@ -1878,7 +2677,7 @@ def generate_simple_combined_chart(data, stock_code):
         y=data['VMA5'],
         mode='lines',
         name='VMA5',
-        line=dict(color='blue', width=1.5)
+        line=dict(color=SIGNAL_BLUE, width=1.5)
     ), row=2, col=1)
     
     # 添加VMA60
@@ -1887,7 +2686,7 @@ def generate_simple_combined_chart(data, stock_code):
         y=data['VMA60'],
         mode='lines',
         name='VMA60',
-        line=dict(color='orange', width=1.5)
+        line=dict(color=SIGNAL_ORANGE, width=1.5)
     ), row=2, col=1)
     
     # 第三行：仓位和策略收益率
@@ -1897,7 +2696,7 @@ def generate_simple_combined_chart(data, stock_code):
         y=data['position'] * 100,
         mode='lines',
         name='仓位 (%)',
-        line=dict(color='green', width=1.5)
+        line=dict(color=FALL_GREEN, width=1.5)
     ), row=3, col=1)
     
     # 添加策略收益率
@@ -1906,7 +2705,7 @@ def generate_simple_combined_chart(data, stock_code):
         y=(data['cumulative_return'] - 1) * 100,
         mode='lines',
         name='策略收益率 (%)',
-        line=dict(color='blue', width=1.5)
+        line=dict(color=SIGNAL_BLUE, width=1.5)
     ), row=3, col=1)
     
     # 设置图表布局
@@ -2024,13 +2823,13 @@ def generate_simple_combined_chart(data, stock_code):
             t=100,
             pad=4
         ),
-        # 启用缩放和平移工具
-        dragmode="zoom",
+        # 保持阅读型图表，避免滚轮和拖拽影响页面翻页
+        dragmode=False,
         # 添加工具栏
         modebar=dict(
             orientation="h",
             bgcolor=colors['hover_bg'],
-            activecolor="#007bff",
+            activecolor=RISE_RED,
             color=colors['text_color']
         ),
         # 半透明悬浮窗
@@ -2054,7 +2853,7 @@ def generate_strategy_benchmark_chart(data, stock_code):
     fig.add_trace(go.Scatter(
         x=data.index, y=data['cumulative_return'], mode='lines',
         name='策略收益',
-        line=dict(width=2, color='#007AFF'),
+        line=dict(width=2, color=SIGNAL_BLUE),
     ))
 
     # 基准净值
@@ -2078,7 +2877,7 @@ def generate_strategy_benchmark_chart(data, stock_code):
     fig.add_trace(go.Scatter(
         x=data.index, y=data['excess_return'], mode='lines',
         name='超额收益',
-        line=dict(width=1.5, color='#34C759'),
+        line=dict(width=1.5, color=FALL_GREEN),
     ))
 
     fig.add_hline(y=1, line_dash="dot", line_color=colors_scheme['text_secondary'], opacity=0.4)
@@ -2109,7 +2908,7 @@ def generate_radar_chart(metrics_list, strategy_names):
     
     # 准备数据
     data = []
-    colors = ['#007bff', '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeead']
+    colors = [RISE_RED, SIGNAL_BLUE, SIGNAL_LIME, SIGNAL_GOLD, SIGNAL_PURPLE, FALL_GREEN]
     
     for i, (metrics, name) in enumerate(zip(metrics_list, strategy_names)):
         # 归一化数据
@@ -2174,11 +2973,12 @@ def generate_monthly_returns_chart(data):
     colors_scheme = get_color_scheme()
     template = get_plotly_template(colors_scheme)
 
-    bar_colors = ['#FF3B30' if x > 0 else '#34C759' for x in monthly_returns['strategy_return']]
+    bar_colors = [RISE_RED if x > 0 else FALL_GREEN for x in monthly_returns['strategy_return']]
+    bar_line_colors = [RISE_RED_DARK if x > 0 else FALL_GREEN_DARK for x in monthly_returns['strategy_return']]
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=monthly_returns['month'], y=monthly_returns['strategy_return'] * 100,
-        name='月度收益率', marker=dict(color=bar_colors, opacity=0.85),
+        name='月度收益率', marker=dict(color=bar_colors, opacity=0.82, line=dict(color=bar_line_colors, width=0.8)),
     ))
     fig.add_hline(y=0, line_dash="dot", line_color=colors_scheme['text_secondary'], opacity=0.4)
 
@@ -2267,7 +3067,7 @@ def generate_3d_strategy_comparison_chart(all_data, stock_code, strategy_names):
             z = returns.values.tolist()
             
             # 生成颜色
-            color = ['#007bff', '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeead'][i % 6]
+            color = [RISE_RED, SIGNAL_BLUE, SIGNAL_LIME, SIGNAL_GOLD, SIGNAL_PURPLE, FALL_GREEN][i % 6]
             
             # 添加3D柱状图（使用Mesh3d）
             # 限制数据点数量，提高性能
@@ -2382,13 +3182,13 @@ def generate_3d_strategy_comparison_chart(all_data, stock_code, strategy_names):
             aspectmode="manual",  # 手动设置纵横比
             aspectratio=dict(x=1, y=0.5, z=0.5)  # 调整纵横比，使图表更紧凑
         ),
-        # 启用缩放和平移工具，但限制旋转
-        dragmode="turntable",  # 限制旋转范围
+        # 保持阅读型图表，避免拖拽影响页面翻页
+        dragmode=False,
         # 添加工具栏
         modebar=dict(
             orientation="h",
             bgcolor=colors['hover_bg'],
-            activecolor="#007bff",
+            activecolor=RISE_RED,
             color=colors['text_color']
         ),
         # 半透明悬浮窗
@@ -2409,13 +3209,33 @@ def generate_3d_strategy_comparison_chart(all_data, stock_code, strategy_names):
 
 # 主函数
 def main():
-    # 设置页面标题和图标
-    st.title("股票交易策略回测系统")
-    st.markdown("### 专业的股票策略回测与分析工具")
+    st.markdown(
+        f"""<section class="lux-alpha-hero">
+<div>{LUXE_ALPHA_LOGO_SVG}</div>
+<div>
+<div class="lux-alpha-kicker">77 MULTICOLOR STRATEGY ATELIER</div>
+<h1 class="lux-alpha-title">77股票交易策略回测工作台</h1>
+<p class="lux-alpha-subtitle">以多策略回测、风险曲线与交易信号为核心，构建清晰、克制、可复盘的策略判断流程。</p>
+</div>
+<div class="lux-alpha-badges">
+<span class="lux-alpha-badge"><span class="lux-alpha-dot" style="background:#E8578B"></span>收益复盘</span>
+<span class="lux-alpha-badge"><span class="lux-alpha-dot" style="background:#4A90D9"></span>策略对比</span>
+<span class="lux-alpha-badge"><span class="lux-alpha-dot" style="background:#7DCB6D"></span>风险曲线</span>
+</div>
+</section>""",
+        unsafe_allow_html=True,
+    )
     
     # 侧边栏输入参数
     with st.sidebar:
-        st.header("回测参数")
+        st.markdown(
+            f"""<div class="lux-alpha-sidebar-brand">
+{LUXE_ALPHA_LOGO_SVG}
+<p class="lux-alpha-sidebar-title">77 参数工作台</p>
+<p class="lux-alpha-sidebar-caption">Stock · Risk · Signal · Discipline</p>
+</div>""",
+            unsafe_allow_html=True,
+        )
         
         # 支持多个股票代码输入，用逗号分隔
         stock_codes_input = st.text_input(
@@ -2451,7 +3271,7 @@ def main():
         # 回测按钮
         st.markdown("---")
         run_backtest = st.button(
-            "开始回测",
+            "启动回测",
             use_container_width=True
         )
         
@@ -2472,7 +3292,8 @@ def main():
                 for i, uploaded_file in enumerate(uploaded_files):
                     # 读取上传的策略代码
                     strategy_code = uploaded_file.read().decode('utf-8')
-                    if strategy_uses_blocked_dependency(strategy_code):
+                    blocked_imports = ("import efinance", "from efinance")
+                    if any(blocked in strategy_code for blocked in blocked_imports):
                         st.error(
                             f"策略 {i+1} 包含 efinance 依赖。Streamlit Cloud 环境不支持 efinance，"
                             "请删除策略文件里的 import efinance / from efinance 后重新上传。"
@@ -2483,14 +3304,8 @@ def main():
                     # 执行上传的策略代码
                     try:
                         exec(strategy_code, strategy_namespace)
-                    except PermissionError as e:
-                        st.error(
-                            f"策略 {i+1} 加载失败：策略代码尝试访问云端不可写目录。"
-                            f"如果策略文件引用 efinance，请删除该依赖后重试。错误摘要：{str(e)[:160]}"
-                        )
-                        continue
                     except Exception as e:
-                        st.error(f"策略 {i+1} 加载失败：{str(e)[:200]}")
+                        st.error(f"策略 {i+1} 加载失败：{str(e)[:160]}")
                         continue
                     # 检查是否包含必要的函数
                     required_functions = ['calculate_indicators', 'implement_strategy', 'calculate_returns', 'calculate_performance_metrics']
@@ -2677,7 +3492,7 @@ def main():
                     if len(strategies) == 1:
                         # 策略与基准对比图表（只显示策略收益、基准收益和超额收益）
                         benchmark_fig = generate_strategy_benchmark_chart(strategy_data, stock_code)
-                        st.plotly_chart(benchmark_fig, use_container_width=True, key=f"benchmark_{stock_code}_{strategy_name}")
+                        render_chart(benchmark_fig, key=f"benchmark_{stock_code}_{strategy_name}")
                 
                 # 横向排列策略
                 if len(strategies) > 1:
@@ -2721,11 +3536,11 @@ def main():
                             
                             # 生成策略与基准对比图表（只显示策略收益、基准收益和超额收益）
                             benchmark_fig = generate_strategy_benchmark_chart(strategy_data, stock_code)
-                            st.plotly_chart(benchmark_fig, use_container_width=True, key=f"benchmark_compare_{stock_code}_{strategy_name}")
+                            render_chart(benchmark_fig, key=f"benchmark_compare_{stock_code}_{strategy_name}")
                             
                             # 生成月度收益率分析图
                             monthly_fig = generate_monthly_returns_chart(strategy_data)
-                            st.plotly_chart(monthly_fig, use_container_width=True, key=f"monthly_returns_{stock_code}_{strategy_name}")
+                            render_chart(monthly_fig, key=f"monthly_returns_{stock_code}_{strategy_name}")
                     
                     # 策略净值对比
                     st.subheader("策略净值对比")
@@ -2753,7 +3568,7 @@ def main():
                                 ticktext=strategy_data.index[::max(1, len(strategy_data)//30)].strftime('%Y-%m'),
                                 tickangle=0),
                         )
-                        st.plotly_chart(net_value_compare_fig, use_container_width=True, key=f"net_value_compare_{stock_code}")
+                        render_chart(net_value_compare_fig, key=f"net_value_compare_{stock_code}")
 
                     # 策略回撤对比
                     st.subheader("策略回撤对比")
@@ -2779,12 +3594,12 @@ def main():
                                 ticktext=strategy_data.index[::max(1, len(strategy_data)//30)].strftime('%Y-%m'),
                                 tickangle=0),
                         )
-                        st.plotly_chart(drawdown_compare_fig, use_container_width=True, key=f"drawdown_compare_{stock_code}")
+                        render_chart(drawdown_compare_fig, key=f"drawdown_compare_{stock_code}")
                     
                     # 策略性能指标雷达图对比
                     st.subheader("策略性能指标雷达图对比")
                     radar_colors_s = get_color_scheme()
-                    apple_colors = ['#007AFF', '#FF3B30', '#34C759', '#FF9500', '#5AC8FA', '#AF52DE']
+                    apple_colors = [SIGNAL_BLUE, RISE_RED, FALL_GREEN, SIGNAL_ORANGE, FALL_GREEN, SIGNAL_PURPLE]
                     radar_compare_fig = go.Figure()
                     for i, strategy_name in enumerate(strategies):
                         if strategy_name in all_data[stock_code]:
@@ -2828,7 +3643,7 @@ def main():
                             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5,
                                 font=dict(size=12)),
                         )
-                        st.plotly_chart(radar_compare_fig, use_container_width=True, key=f"radar_compare_{stock_code}")
+                        render_chart(radar_compare_fig, key=f"radar_compare_{stock_code}")
                         
                         # 添加雷达图下载链接
                         radar_compare_fig.write_html(f"radar_compare_{stock_code}.html")
@@ -2844,7 +3659,7 @@ def main():
                         if len(strategies) > 1:
                             fig_3d = generate_3d_strategy_comparison_chart(all_data, stock_code, strategies)
                             if fig_3d.data:
-                                st.plotly_chart(fig_3d, use_container_width=True, key=f"3d_strategy_compare_{stock_code}")
+                                render_chart(fig_3d, key=f"3d_strategy_compare_{stock_code}")
                     except Exception as e:
                         st.error(f"生成3D图表时出错: {str(e)}")
                     
@@ -2888,7 +3703,7 @@ def main():
                         import matplotlib.pyplot as plt
 
                         # 创建一个大的画布
-                        mp_colors = ['#007AFF', '#FF3B30', '#34C759', '#FF9500', '#5AC8FA', '#AF52DE']
+                        mp_colors = [SIGNAL_BLUE, RISE_RED, FALL_GREEN, SIGNAL_ORANGE, FALL_GREEN, SIGNAL_PURPLE]
                         fig, axes = plt.subplots(2, 2, figsize=(15, 12))
                         
                         # 第一个子图：净值对比
@@ -2898,7 +3713,7 @@ def main():
                                 strategy_data = all_data[stock_code][strategy_name]
                                 ax1.plot(strategy_data.index, strategy_data['cumulative_return'], 
                                          label=strategy_name, color=mp_colors[i % len(mp_colors)], linewidth=2)
-                        ax1.axhline(y=1, linestyle='--', color='gray')
+                        ax1.axhline(y=1, linestyle='--', color='#A79B83')
                         ax1.set_title('策略净值对比')
                         ax1.set_xlabel('日期')
                         ax1.set_ylabel('净值')
@@ -3235,17 +4050,22 @@ def main():
                         kline_fig = generate_kline_chart(strategy_data, f"{stock_display} - {strategy_name}", time_frame, 
                                                       show_ma5=show_ma5, show_ma10=show_ma10, 
                                                       show_ma50=show_ma50, show_ma100=show_ma100)
-                        st.plotly_chart(kline_fig, use_container_width=True, key=f"kline_{stock_code}_{strategy_name}")
+                        kline_fig.update_layout(
+                            height=680,
+                            dragmode="zoom",
+                            title=f"{stock_display} - {strategy_name} 价格走势和交易信号（可滚轮缩放 / 框选放大 / 双击复位）",
+                        )
+                        render_chart(kline_fig, key=f"kline_{stock_code}_{strategy_name}", config=KLINE_RENDER_CONFIG)
                         
                         # 成交量和均量线图表
                         st.subheader(f"{strategy_name} - 成交量和均量线")
                         volume_fig = generate_volume_chart(strategy_data, time_frame)
-                        st.plotly_chart(volume_fig, use_container_width=True, key=f"volume_{stock_code}_{strategy_name}")
+                        render_chart(volume_fig, key=f"volume_{stock_code}_{strategy_name}")
                         
                         # 仓位和策略收益率图表
                         st.subheader(f"{strategy_name} - 仓位和策略收益率")
                         position_fig = generate_position_chart(strategy_data, time_frame)
-                        st.plotly_chart(position_fig, use_container_width=True, key=f"position_{stock_code}_{strategy_name}")
+                        render_chart(position_fig, key=f"position_{stock_code}_{strategy_name}")
                         
 
                         # 回撤曲线
@@ -3258,7 +4078,7 @@ def main():
                             y=strategy_data['drawdown'] * 100,
                             mode='lines',
                             name='回撤',
-                            line=dict(color='#FF3B30', width=1.5),
+                            line=dict(color=RISE_RED, width=1.5),
                             fill='tozeroy',
                             fillcolor='rgba(255,59,48,0.08)'
                         ))
@@ -3273,7 +4093,7 @@ def main():
                                 tickangle=0),
                             yaxis=dict(tickformat=".1f%%", title='回撤 (%)'),
                         )
-                        st.plotly_chart(drawdown_fig, use_container_width=True, key=f"drawdown_{stock_code}_{strategy_name}")
+                        render_chart(drawdown_fig, key=f"drawdown_{stock_code}_{strategy_name}")
                         
                         # 性能指标雷达图
                         st.subheader(f"{strategy_name} - 性能指标雷达图")
@@ -3293,7 +4113,7 @@ def main():
                             fill='toself',
                             name=strategy_name,
                             fillcolor='rgba(0,122,255,0.12)',
-                            line=dict(color='#007AFF', width=2),
+                            line=dict(color=SIGNAL_BLUE, width=2),
                         ))
                         radar_fig.update_layout(
                             polar=dict(
@@ -3309,7 +4129,7 @@ def main():
                             font=dict(color=radar_colors['text_color'], size=13,
                                 family='-apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif'),
                         )
-                        st.plotly_chart(radar_fig, use_container_width=True, key=f"radar_{stock_code}_{strategy_name}")
+                        render_chart(radar_fig, key=f"radar_{stock_code}_{strategy_name}")
                         
                         # 月度收益率
                         st.subheader(f"{strategy_name} - 月度收益率")
@@ -3317,11 +4137,12 @@ def main():
                         monthly_data['month'] = monthly_data.index.strftime('%Y-%m')
                         m_colors_inline = get_color_scheme()
                         m_tpl = get_plotly_template(m_colors_inline)
-                        bar_colors_m = ['#FF3B30' if x > 0 else '#34C759' for x in monthly_data['strategy_return']]
+                        bar_colors_m = [RISE_RED if x > 0 else FALL_GREEN for x in monthly_data['strategy_return']]
+                        bar_line_colors_m = [RISE_RED_DARK if x > 0 else FALL_GREEN_DARK for x in monthly_data['strategy_return']]
                         monthly_fig = go.Figure()
                         monthly_fig.add_trace(go.Bar(
                             x=monthly_data['month'], y=monthly_data['strategy_return'] * 100,
-                            name='月度收益率', marker=dict(color=bar_colors_m, opacity=0.85),
+                            name='月度收益率', marker=dict(color=bar_colors_m, opacity=0.82, line=dict(color=bar_line_colors_m, width=0.8)),
                         ))
                         monthly_fig.add_hline(y=0, line_dash="dot", line_color=m_colors_inline['text_secondary'], opacity=0.4)
                         monthly_fig.update_layout(**m_tpl)
@@ -3329,7 +4150,7 @@ def main():
                             title=f"{strategy_name} - 月度收益率分布", height=380,
                             xaxis=dict(tickangle=0), yaxis=dict(title='收益率 (%)'),
                         )
-                        st.plotly_chart(monthly_fig, use_container_width=True, key=f"monthly_{stock_code}_{strategy_name}")
+                        render_chart(monthly_fig, key=f"monthly_{stock_code}_{strategy_name}")
 
                         # 交易频率分布
                         st.subheader(f"{strategy_name} - 交易频率分布")
@@ -3342,14 +4163,14 @@ def main():
                         trade_freq_fig = go.Figure()
                         trade_freq_fig.add_trace(go.Bar(
                             x=monthly_trades['month'], y=monthly_trades['signal'],
-                            name='交易次数', marker=dict(color='#007AFF', opacity=0.8),
+                            name='交易次数', marker=dict(color=SIGNAL_BLUE, opacity=0.76, line=dict(color="#2E6FA9", width=0.8)),
                         ))
                         trade_freq_fig.update_layout(**tf_tpl)
                         trade_freq_fig.update_layout(
                             title=f"{strategy_name} - 月度交易频率分布", height=380,
                             xaxis=dict(tickangle=0), yaxis=dict(title='交易次数'),
                         )
-                        st.plotly_chart(trade_freq_fig, use_container_width=True, key=f"trade_freq_{stock_code}_{strategy_name}")
+                        render_chart(trade_freq_fig, key=f"trade_freq_{stock_code}_{strategy_name}")
                     
                     # 保存结果
                     # 保存回测结果到CSV
@@ -3374,10 +4195,10 @@ def main():
                         plt.rcParams['axes.unicode_minus'] = False
                         
                         # 1. 价格走势和交易信号
-                        ax1.plot(strategy_data.index, strategy_data['close'], 'b-', label='收盘价', linewidth=1)
+                        ax1.plot(strategy_data.index, strategy_data['close'], color=SIGNAL_BLUE, label='收盘价', linewidth=1)
                         # 检查MA25列是否存在
                         if 'MA25' in strategy_data.columns:
-                            ax1.plot(strategy_data.index, strategy_data['MA25'], 'orange', label='MA25', linewidth=1.5)
+                            ax1.plot(strategy_data.index, strategy_data['MA25'], color=SIGNAL_ORANGE, label='MA25', linewidth=1.5)
                         
                         # 标记买卖信号
                         buy_signals = strategy_data[strategy_data.get('signal', 0) == 1]
@@ -3387,15 +4208,15 @@ def main():
                         stop_loss_signals = strategy_data[strategy_data.get('signal', 0) == 4]
                         
                         if not buy_signals.empty:
-                            ax1.scatter(buy_signals.index, buy_signals['close'], color='green', marker='^', s=50, label='买入')
+                            ax1.scatter(buy_signals.index, buy_signals['close'], color=FALL_GREEN, marker='^', s=50, label='买入')
                         if not add_signals.empty:
-                            ax1.scatter(add_signals.index, add_signals['close'], color='blue', marker='x', s=50, label='加仓')
+                            ax1.scatter(add_signals.index, add_signals['close'], color=SIGNAL_ORANGE, marker='x', s=50, label='加仓')
                         if not sell_signals.empty:
-                            ax1.scatter(sell_signals.index, sell_signals['close'], color='red', marker='v', s=50, label='卖出')
+                            ax1.scatter(sell_signals.index, sell_signals['close'], color=RISE_RED, marker='v', s=50, label='卖出')
                         if not buyback_signals.empty:
-                            ax1.scatter(buyback_signals.index, buyback_signals['close'], color='yellow', marker='o', s=50, label='买回')
+                            ax1.scatter(buyback_signals.index, buyback_signals['close'], color=FALL_GREEN, marker='o', s=50, label='买回')
                         if not stop_loss_signals.empty:
-                            ax1.scatter(stop_loss_signals.index, stop_loss_signals['close'], color='orange', marker='x', s=50, label='止损')
+                            ax1.scatter(stop_loss_signals.index, stop_loss_signals['close'], color=RISE_RED, marker='x', s=50, label='止损')
                         
                         ax1.set_title(f'{stock_display} - {strategy_name} 价格走势和交易信号')
                         ax1.set_ylabel('价格')
@@ -3408,8 +4229,8 @@ def main():
                         plt.setp(ax1.xaxis.get_majorticklabels(), rotation=45)
                         
                         # 2. 策略净值曲线
-                        ax2.plot(strategy_data.index, strategy_data['cumulative_return'], 'b-', label='策略净值', linewidth=2)
-                        ax2.axhline(y=1, linestyle='--', color='gray', label='基准线')
+                        ax2.plot(strategy_data.index, strategy_data['cumulative_return'], color=SIGNAL_BLUE, label='策略净值', linewidth=2)
+                        ax2.axhline(y=1, linestyle='--', color='#A79B83', label='基准线')
                         ax2.set_title(f'{strategy_name} - 策略净值变化')
                         ax2.set_ylabel('净值')
                         ax2.legend(loc='upper left')
@@ -3426,15 +4247,15 @@ def main():
                         strategy_data['VMA60'] = strategy_data['volume'].rolling(window=60).mean()
                         
                         # 计算涨跌颜色
-                        strategy_data['color'] = ['red' if close > open else 'green' for close, open in zip(strategy_data['close'], strategy_data['open'])]
+                        strategy_data['color'] = [RISE_RED if close > open else FALL_GREEN for close, open in zip(strategy_data['close'], strategy_data['open'])]
                         
                         # 绘制成交量柱体
                         for i, (date, row) in enumerate(strategy_data.iterrows()):
                             ax3.bar(date, row['volume'], color=row['color'], alpha=0.3)
                         
                         # 绘制均量线
-                        ax3.plot(strategy_data.index, strategy_data['VMA5'], 'b-', label='VMA5', linewidth=1)
-                        ax3.plot(strategy_data.index, strategy_data['VMA60'], 'orange', label='VMA60', linewidth=1)
+                        ax3.plot(strategy_data.index, strategy_data['VMA5'], color=SIGNAL_BLUE, label='VMA5', linewidth=1)
+                        ax3.plot(strategy_data.index, strategy_data['VMA60'], color=SIGNAL_ORANGE, label='VMA60', linewidth=1)
                         
                         ax3.set_title('成交量和均量线')
                         ax3.set_ylabel('成交量')
@@ -3447,8 +4268,8 @@ def main():
                         plt.setp(ax3.xaxis.get_majorticklabels(), rotation=45)
                         
                         # 4. 回撤曲线
-                        ax4.plot(strategy_data.index, strategy_data['drawdown'] * 100, 'r-', label='回撤 (%)', linewidth=2)
-                        ax4.fill_between(strategy_data.index, 0, strategy_data['drawdown'] * 100, color='red', alpha=0.2)
+                        ax4.plot(strategy_data.index, strategy_data['drawdown'] * 100, color=RISE_RED, label='回撤 (%)', linewidth=2)
+                        ax4.fill_between(strategy_data.index, 0, strategy_data['drawdown'] * 100, color=RISE_RED, alpha=0.15)
                         ax4.set_title(f'{strategy_name} - 策略回撤情况')
                         ax4.set_ylabel('回撤 (%)')
                         ax4.legend(loc='upper left')
@@ -3460,16 +4281,16 @@ def main():
                         plt.setp(ax4.xaxis.get_majorticklabels(), rotation=45)
                         
                         # 5. 仓位和策略收益率
-                        ax5.plot(strategy_data.index, strategy_data['position'] * 100, 'g-', label='仓位 (%)', linewidth=1)
-                        ax5.set_ylabel('仓位 (%)', color='green')
-                        ax5.tick_params(axis='y', labelcolor='green')
+                        ax5.plot(strategy_data.index, strategy_data['position'] * 100, color=FALL_GREEN, label='仓位 (%)', linewidth=1)
+                        ax5.set_ylabel('仓位 (%)', color=FALL_GREEN)
+                        ax5.tick_params(axis='y', labelcolor=FALL_GREEN)
                         ax5.set_ylim(0, 100)
-                        
+
                         # 创建第二个y轴用于策略收益率
                         ax5_right = ax5.twinx()
-                        ax5_right.plot(strategy_data.index, (strategy_data['cumulative_return'] - 1) * 100, 'b-', label='策略收益率 (%)', linewidth=1)
-                        ax5_right.set_ylabel('策略收益率 (%)', color='blue')
-                        ax5_right.tick_params(axis='y', labelcolor='blue')
+                        ax5_right.plot(strategy_data.index, (strategy_data['cumulative_return'] - 1) * 100, color=SIGNAL_BLUE, label='策略收益率 (%)', linewidth=1)
+                        ax5_right.set_ylabel('策略收益率 (%)', color=SIGNAL_BLUE)
+                        ax5_right.tick_params(axis='y', labelcolor=SIGNAL_BLUE)
                         
                         ax5.set_title(f'{strategy_name} - 仓位和策略收益率')
                         ax5.grid(True, alpha=0.3)
@@ -3537,8 +4358,9 @@ def main():
                             })
                             monthly_data['month'] = monthly_data.index.strftime('%Y-%m')
                             
-                            colors = ['red' if x > 0 else 'green' for x in monthly_data['strategy_return']]
-                            ax7.bar(monthly_data['month'], monthly_data['strategy_return'] * 100, color=colors, label='月度收益率')
+                            colors = [RISE_RED if x > 0 else FALL_GREEN for x in monthly_data['strategy_return']]
+                            edge_colors = [RISE_RED_DARK if x > 0 else FALL_GREEN_DARK for x in monthly_data['strategy_return']]
+                            ax7.bar(monthly_data['month'], monthly_data['strategy_return'] * 100, color=colors, edgecolor=edge_colors, linewidth=0.7, label='月度收益率')
                             ax7.set_title(f'{strategy_name} - 月度收益率分布')
                             ax7.set_xlabel('月份')
                             ax7.set_ylabel('收益率 (%)')
@@ -3552,7 +4374,7 @@ def main():
                             })
                             monthly_trades['month'] = monthly_trades.index.strftime('%Y-%m')
                             
-                            ax8.bar(monthly_trades['month'], monthly_trades['signal'], color='blue', label='交易次数')
+                            ax8.bar(monthly_trades['month'], monthly_trades['signal'], color=SIGNAL_BLUE, edgecolor='#2E6FA9', linewidth=0.7, label='交易次数')
                             ax8.set_title(f'{strategy_name} - 月度交易频率分布')
                             ax8.set_xlabel('月份')
                             ax8.set_ylabel('交易次数')
@@ -3610,17 +4432,17 @@ def main():
                         tickangle=45,  # 旋转标签避免重叠
                         nticks=20  # 限制显示的刻度数量
                     ),
-                    # 启用缩放和平移工具
-                    dragmode="zoom",
+                    # 保持阅读型图表，避免滚轮和拖拽影响页面翻页
+                    dragmode=False,
                     # 添加工具栏
                     modebar=dict(
                         orientation="h",
                         bgcolor="rgba(255, 255, 255, 0.8)",
-                        activecolor="#007bff"
+                        activecolor=RISE_RED
                     )
                 )
                 
-                st.plotly_chart(comparison_fig, use_container_width=True)
+                render_chart(comparison_fig)
                 
                 # 生成性能指标比较表格
                 comparison_data = []
@@ -3663,7 +4485,7 @@ def main():
                                     name=strategy_name
                                 ))
                         
-                        strategy_compare_fig.add_hline(y=1, line_dash="dash", line_color="gray", name="基准线")
+                        strategy_compare_fig.add_hline(y=1, line_dash="dash", line_color="#A79B83", name="基准线")
                         strategy_compare_fig.update_layout(
                             title=f'{stock_display} 策略净值对比',
                             xaxis_title='日期',
@@ -3678,7 +4500,7 @@ def main():
                                 tickangle=45
                             )
                         )
-                        st.plotly_chart(strategy_compare_fig, use_container_width=True)
+                        render_chart(strategy_compare_fig)
                         
                         # 生成策略性能指标对比表格
                         strategy_comparison_data = []
@@ -3710,3 +4532,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
