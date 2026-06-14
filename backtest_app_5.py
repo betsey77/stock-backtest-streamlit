@@ -107,6 +107,33 @@ if pattern_file.exists():
         BACKGROUND_77_PATTERN_SVG.encode("utf-8")
     ).decode("ascii")
 
+def asset_data_uri(relative_path, mime_type):
+    asset_path = Path(__file__).resolve().parent / relative_path
+    if not asset_path.exists():
+        return None
+    return "data:{mime};base64,{payload}".format(
+        mime=mime_type,
+        payload=base64.b64encode(asset_path.read_bytes()).decode("ascii"),
+    )
+
+SIDEBAR_MEDALLION_URI = asset_data_uri("assets/brand/sidebar_medallion.png", "image/png")
+HERO_ALPHA_BADGE_URI = asset_data_uri("assets/brand/hero_alpha_badge.png", "image/png")
+AGENT_ANALYST_PATH = Path(__file__).resolve().parent / "assets/brand/agent_analyst.png"
+CLOSING_BANNER_PATH = Path(__file__).resolve().parent / "assets/brand/closing_banner.png"
+CLOSING_WORDMARK_EN_PATH = Path(__file__).resolve().parent / "assets/brand/closing_wordmark_en.png"
+CLOSING_WORDMARK_CN_PATH = Path(__file__).resolve().parent / "assets/brand/closing_wordmark_cn.png"
+BRAND_BACKGROUND_CSS = f'url("{BACKGROUND_77_PATTERN_URI}")'
+SIDEBAR_MEDALLION_HTML = (
+    f'<img class="lux-alpha-sidebar-medallion" src="{SIDEBAR_MEDALLION_URI}" alt="77 AIpha Atelier medallion">'
+    if SIDEBAR_MEDALLION_URI
+    else LUXE_ALPHA_LOGO_SVG
+)
+HERO_ALPHA_BADGE_HTML = (
+    f'<img class="lux-alpha-hero-badge" src="{HERO_ALPHA_BADGE_URI}" alt="77 AIpha Atelier badge">'
+    if HERO_ALPHA_BADGE_URI
+    else LUXE_ALPHA_LOGO_SVG
+)
+
 # 77 theme chart semantics: A-share convention uses red for rise, green for fall.
 RISE_RED = "#E8578B"
 RISE_RED_DARK = "#B91C4C"
@@ -378,9 +405,34 @@ def render_chart(fig, key=None, config=None):
         key=key,
     )
 
+def render_agent_analysis_card():
+    if not AGENT_ANALYST_PATH.exists():
+        return
+    left, right = st.columns([1, 5])
+    with left:
+        st.image(str(AGENT_ANALYST_PATH), width=128)
+    with right:
+        st.markdown(
+            "**77AIpha 智能体分析**  \n"
+            "综合收益、回撤、夏普比率、胜率与交易频率，生成当前策略的智能评估结论。"
+        )
+
+def render_completion_brand_assets():
+    brand_assets = [
+        CLOSING_BANNER_PATH,
+        CLOSING_WORDMARK_EN_PATH,
+        CLOSING_WORDMARK_CN_PATH,
+    ]
+    existing_assets = [path for path in brand_assets if path.exists()]
+    if not existing_assets:
+        return
+    st.markdown("---")
+    for path in existing_assets:
+        st.image(str(path), use_container_width=True)
+
 # 自定义CSS样式 - 白色基底 + 多色点缀卡片（v3 · cache-bust 2026-06-08）
 st.markdown(
-    f"""<style>:root {{ --pattern-77-bg: url("{BACKGROUND_77_PATTERN_URI}"); --mx: 50vw; --my: 50vh; }}</style>""",
+    f"""<style>:root {{ --pattern-77-bg: url("{BACKGROUND_77_PATTERN_URI}"); --brand-stage-bg: {BRAND_BACKGROUND_CSS}; --mx: 50vw; --my: 50vh; }}</style>""",
     unsafe_allow_html=True,
 )
 
@@ -890,7 +942,7 @@ st.markdown("""
     [data-testid="stApp"] {
         background:
             linear-gradient(180deg, rgba(255,255,255,0.78), rgba(250,248,242,0.92)),
-            var(--pattern-77-bg),
+            var(--brand-stage-bg),
             radial-gradient(circle at 14% 8%, rgba(232,87,139,0.12), transparent 22%),
             radial-gradient(circle at 88% 6%, rgba(74,144,217,0.12), transparent 24%),
             #FAF8F2 !important;
@@ -922,7 +974,7 @@ st.markdown("""
         inset: 0;
         z-index: 0;
         pointer-events: none;
-        background: var(--pattern-77-bg) center top / cover no-repeat;
+        background: var(--brand-stage-bg) center top / cover no-repeat;
         opacity: 0.52;
         filter: saturate(2.05) brightness(1.03);
         mix-blend-mode: multiply;
@@ -933,7 +985,7 @@ st.markdown("""
     [data-testid="stSidebar"] {
         background:
             linear-gradient(180deg, rgba(255,255,255,0.94), rgba(250,248,242,0.96)),
-            var(--pattern-77-bg) !important;
+            var(--brand-stage-bg) !important;
         background-size: auto, 520px 292px !important;
         background-position: center top !important;
         border-right: 1px solid rgba(216,190,120,0.36);
@@ -969,6 +1021,39 @@ st.markdown("""
         width: 92px;
         height: 92px;
     }
+    .lux-alpha-hero-brand {
+        display: grid;
+        place-items: center;
+        min-width: 190px;
+    }
+    .lux-alpha-hero-badge {
+        width: 190px;
+        height: 190px;
+        object-fit: contain;
+        filter:
+            drop-shadow(0 12px 26px rgba(216,164,65,0.16))
+            drop-shadow(0 20px 42px rgba(74,144,217,0.10));
+    }
+    .lux-alpha-logo-img {
+        width: 92px;
+        height: 92px;
+        object-fit: contain;
+        filter:
+            drop-shadow(0 10px 22px rgba(216,164,65,0.18))
+            drop-shadow(0 16px 34px rgba(74,144,217,0.10));
+    }
+    .lux-alpha-medallion {
+        width: 66px;
+        height: 66px;
+        object-fit: cover;
+        border-radius: 50%;
+        margin-left: -26px;
+        margin-bottom: -2px;
+        border: 1px solid rgba(216,190,120,0.54);
+        box-shadow:
+            0 8px 22px rgba(43,33,12,0.13),
+            0 0 0 4px rgba(255,255,255,0.50);
+    }
     .lux-alpha-kicker {
         color: #8F6A1F !important;
         font-size: 0.7rem;
@@ -993,15 +1078,38 @@ st.markdown("""
     .lux-alpha-sidebar-brand {
         background:
             linear-gradient(145deg, rgba(255,255,255,0.96), rgba(255,255,255,0.76)),
-            var(--pattern-77-bg);
+            var(--brand-stage-bg);
         background-size: auto, 420px 236px;
         border: 1px solid rgba(216,190,120,0.44);
         border-radius: 16px;
         box-shadow: 0 14px 42px rgba(43,33,12,0.10);
     }
-    .lux-alpha-sidebar-brand .lux-alpha-logo {
+    .lux-alpha-sidebar-brand-top {
+        display: grid;
+        place-items: center;
+        min-height: 98px;
+        margin-bottom: 0.55rem;
+    }
+    .lux-alpha-sidebar-medallion {
+        width: min(100%, 222px);
+        height: 104px;
+        object-fit: contain;
+        filter:
+            drop-shadow(0 10px 24px rgba(216,164,65,0.16))
+            drop-shadow(0 18px 34px rgba(74,144,217,0.09));
+    }
+    .lux-alpha-avatar {
         width: 54px;
         height: 54px;
+        object-fit: cover;
+        border-radius: 50%;
+        border: 1px solid rgba(216,190,120,0.58);
+        box-shadow: 0 8px 24px rgba(43,33,12,0.13);
+    }
+    .lux-alpha-sidebar-brand .lux-alpha-logo {
+        width: 76px;
+        height: 54px;
+        object-fit: contain;
     }
     .lux-alpha-sidebar-title {
         font-size: 1.05rem;
@@ -3211,7 +3319,7 @@ def generate_3d_strategy_comparison_chart(all_data, stock_code, strategy_names):
 def main():
     st.markdown(
         f"""<section class="lux-alpha-hero">
-<div>{LUXE_ALPHA_LOGO_SVG}</div>
+<div class="lux-alpha-hero-brand">{HERO_ALPHA_BADGE_HTML}</div>
 <div>
 <div class="lux-alpha-kicker">77 MULTICOLOR STRATEGY ATELIER</div>
 <h1 class="lux-alpha-title">77股票交易策略回测工作台</h1>
@@ -3230,7 +3338,7 @@ def main():
     with st.sidebar:
         st.markdown(
             f"""<div class="lux-alpha-sidebar-brand">
-{LUXE_ALPHA_LOGO_SVG}
+<div class="lux-alpha-sidebar-brand-top">{SIDEBAR_MEDALLION_HTML}</div>
 <p class="lux-alpha-sidebar-title">77 参数工作台</p>
 <p class="lux-alpha-sidebar-caption">Stock · Risk · Signal · Discipline</p>
 </div>""",
@@ -3801,6 +3909,7 @@ def main():
                     
                     # 添加综合评估
                     st.subheader("策略综合评估")
+                    render_agent_analysis_card()
                     if strategies:
                         # 计算每个策略的综合得分
                         strategy_scores = {}
@@ -4526,6 +4635,7 @@ def main():
                             st.table(strategy_comparison_df)
             
             st.success("回测完成！")
+            render_completion_brand_assets()
             
         except Exception as e:
             st.error(f"回测过程中出现错误: {str(e)}")

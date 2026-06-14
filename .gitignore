@@ -1,8 +1,14 @@
 .streamlit/secrets.toml
 __pycache__/
 *.py[cod]
+*.log
 yfinance_cache/
 *.png
+!assets/
+!assets/logo/
+!assets/logo/*.png
+!assets/brand/
+!assets/brand/*.png
 *.html
 .DS_Store
 .venv/
