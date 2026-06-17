@@ -430,6 +430,137 @@ def render_completion_brand_assets():
     for path in existing_assets:
         st.image(str(path), use_container_width=True)
 
+def generate_strategy_metric_scatter(strategy_rows, stock_display):
+    """Create a quadrant bubble chart for multi-strategy metric judgment."""
+    if not strategy_rows:
+        return None
+
+    df = pd.DataFrame(strategy_rows)
+    if df.empty:
+        return None
+
+    df["收益能力"] = df["annual_return"] * 100
+    df["风险控制"] = (1 - df["max_drawdown"].abs()).clip(lower=0) * 100
+    df["胜率"] = df["win_rate"] * 100
+    df["回撤"] = df["max_drawdown"].abs() * 100
+    df["夏普气泡"] = (df["sharpe_ratio"].clip(lower=0) + 0.35) * 28
+    df["综合评分"] = (
+        df["total_return"] * 30
+        + df["annual_return"] * 25
+        + (1 + df["max_drawdown"]) * 20
+        + df["sharpe_ratio"] * 15
+        + df["win_rate"] * 10
+    )
+    x_mid = float(df["收益能力"].median()) if len(df) > 1 else float(df["收益能力"].iloc[0])
+    y_mid = float(df["风险控制"].median()) if len(df) > 1 else float(df["风险控制"].iloc[0])
+
+    x_min = min(float(df["收益能力"].min()), x_mid) - 4
+    x_max = max(float(df["收益能力"].max()), x_mid) + 4
+    y_min = max(0, min(float(df["风险控制"].min()), y_mid) - 4)
+    y_max = min(105, max(float(df["风险控制"].max()), y_mid) + 4)
+    if x_min == x_max:
+        x_min -= 5
+        x_max += 5
+    if y_min == y_max:
+        y_min = max(0, y_min - 5)
+        y_max = min(105, y_max + 5)
+
+    colors = get_color_scheme()
+    tpl = get_plotly_template(colors)
+    fig = go.Figure()
+
+    # Quadrant backgrounds: upper-right is the preferred region.
+    fig.add_shape(type="rect", x0=x_min, x1=x_mid, y0=y_mid, y1=y_max,
+                  fillcolor="rgba(74,144,217,0.09)", line=dict(width=0), layer="below")
+    fig.add_shape(type="rect", x0=x_mid, x1=x_max, y0=y_mid, y1=y_max,
+                  fillcolor="rgba(46,167,160,0.11)", line=dict(width=0), layer="below")
+    fig.add_shape(type="rect", x0=x_min, x1=x_mid, y0=y_min, y1=y_mid,
+                  fillcolor="rgba(232,87,139,0.09)", line=dict(width=0), layer="below")
+    fig.add_shape(type="rect", x0=x_mid, x1=x_max, y0=y_min, y1=y_mid,
+                  fillcolor="rgba(217,164,65,0.10)", line=dict(width=0), layer="below")
+
+    fig.add_vline(x=x_mid, line_dash="dash", line_color="rgba(32,37,50,0.36)")
+    fig.add_hline(y=y_mid, line_dash="dash", line_color="rgba(32,37,50,0.36)")
+
+    fig.add_trace(go.Scatter(
+        x=df["收益能力"],
+        y=df["风险控制"],
+        mode="markers+text",
+        text=df["strategy"],
+        textposition="top center",
+        marker=dict(
+            size=df["夏普气泡"],
+            color=df["综合评分"],
+            colorscale=[
+                [0, RISE_RED],
+                [0.5, SIGNAL_GOLD],
+                [1, FALL_GREEN],
+            ],
+            showscale=True,
+            colorbar=dict(title="综合评分", thickness=12),
+            opacity=0.82,
+            line=dict(color="rgba(255,255,255,0.88)", width=1.6),
+        ),
+        customdata=np.stack([
+            df["total_return"] * 100,
+            df["annual_return"] * 100,
+            df["回撤"],
+            df["sharpe_ratio"],
+            df["胜率"],
+            df["total_trades"],
+            df["综合评分"],
+        ], axis=-1),
+        hovertemplate=(
+            "<b>%{text}</b><br>"
+            "总收益率: %{customdata[0]:.2f}%<br>"
+            "年化收益率: %{customdata[1]:.2f}%<br>"
+            "最大回撤: %{customdata[2]:.2f}%<br>"
+            "夏普比率: %{customdata[3]:.2f}<br>"
+            "胜率: %{customdata[4]:.2f}%<br>"
+            "交易次数: %{customdata[5]:.0f}<br>"
+            "综合评分: %{customdata[6]:.2f}<extra></extra>"
+        ),
+    ))
+
+    annotations = [
+        (x_min + (x_mid - x_min) * 0.5, y_mid + (y_max - y_mid) * 0.88, "稳健保守"),
+        (x_mid + (x_max - x_mid) * 0.5, y_mid + (y_max - y_mid) * 0.88, "高效优选"),
+        (x_min + (x_mid - x_min) * 0.5, y_min + (y_mid - y_min) * 0.12, "待优化"),
+        (x_mid + (x_max - x_mid) * 0.5, y_min + (y_mid - y_min) * 0.12, "进攻高波动"),
+    ]
+    for x, y, label in annotations:
+        fig.add_annotation(
+            x=x,
+            y=y,
+            text=label,
+            showarrow=False,
+            bgcolor="rgba(255,255,255,0.72)",
+            bordercolor="rgba(216,190,120,0.42)",
+            borderwidth=1,
+            font=dict(size=13, color=colors["text_color"]),
+        )
+
+    fig.update_layout(**tpl)
+    fig.update_layout(
+        title=f"{stock_display} 策略指标象限气泡图",
+        height=560,
+        xaxis=dict(
+            title="收益能力：年化收益率 (%)，越右越强",
+            range=[x_min, x_max],
+            zeroline=True,
+            zerolinecolor="rgba(32,37,50,0.16)",
+        ),
+        yaxis=dict(
+            title="风险控制能力：1 - 最大回撤 (%)，越高越稳",
+            range=[y_min, y_max],
+            ticksuffix="%",
+        ),
+        showlegend=False,
+        dragmode=False,
+        margin=dict(l=56, r=32, t=72, b=58),
+    )
+    return fig
+
 # 自定义CSS样式 - 白色基底 + 多色点缀卡片（v3 · cache-bust 2026-06-08）
 st.markdown(
     f"""<style>:root {{ --pattern-77-bg: url("{BACKGROUND_77_PATTERN_URI}"); --brand-stage-bg: {BRAND_BACKGROUND_CSS}; --mx: 50vw; --my: 50vh; }}</style>""",
@@ -4610,6 +4741,40 @@ def main():
                             )
                         )
                         render_chart(strategy_compare_fig)
+
+                        strategy_scatter_rows = []
+                        for strategy_name in strategies:
+                            if strategy_name in all_data[stock_code]:
+                                matched_result = next(
+                                    (
+                                        result for result in all_results
+                                        if result['stock_code'] == stock_code and result['strategy'] == strategy_name
+                                    ),
+                                    None,
+                                )
+                                if matched_result:
+                                    metrics = matched_result['metrics']
+                                    strategy_scatter_rows.append({
+                                        "strategy": strategy_name,
+                                        "total_return": metrics['total_return'],
+                                        "annual_return": metrics['annual_return'],
+                                        "max_drawdown": metrics['max_drawdown'],
+                                        "sharpe_ratio": metrics['sharpe_ratio'],
+                                        "win_rate": metrics['win_rate'],
+                                        "total_trades": metrics['total_trades'],
+                                    })
+
+                        strategy_metric_scatter = generate_strategy_metric_scatter(
+                            strategy_scatter_rows,
+                            stock_display,
+                        )
+                        if strategy_metric_scatter is not None:
+                            st.subheader(f"{stock_display} 策略指标象限气泡图")
+                            st.caption("横轴衡量收益能力，纵轴衡量风险控制能力；气泡越大代表夏普比率越高，颜色越绿代表综合评分越强。")
+                            render_chart(
+                                strategy_metric_scatter,
+                                key=f"strategy_metric_scatter_{stock_code}",
+                            )
                         
                         # 生成策略性能指标对比表格
                         strategy_comparison_data = []
