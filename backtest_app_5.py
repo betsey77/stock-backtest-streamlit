@@ -253,11 +253,33 @@ def get_tickflow_client():
     return client
 
 def configure_matplotlib_chinese_font():
-    """Pick an installed CJK font so generated PNG charts keep Chinese labels."""
-    candidates = [
+    """Load a real CJK font file so generated PNG charts keep Chinese labels."""
+    font_file_candidates = [
+        Path(__file__).resolve().parent / "assets/fonts/NotoSansCJK-Regular.ttc",
+        Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+        Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.otf"),
+        Path("/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf"),
+        Path("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc"),
+        Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"),
+        Path("C:/Windows/Fonts/msyh.ttc"),
+        Path("C:/Windows/Fonts/simhei.ttf"),
+        Path("/System/Library/Fonts/PingFang.ttc"),
+    ]
+    loaded_fonts = []
+    for font_path in font_file_candidates:
+        if font_path.exists():
+            try:
+                font_manager.fontManager.addfont(str(font_path))
+                loaded_fonts.append(font_manager.FontProperties(fname=str(font_path)).get_name())
+            except Exception:
+                pass
+
+    font_name_candidates = [
         'Noto Sans CJK SC',
         'Noto Sans CJK JP',
         'Noto Sans CJK TC',
+        'WenQuanYi Micro Hei',
+        'WenQuanYi Zen Hei',
         'Source Han Sans SC',
         'Microsoft YaHei',
         'SimHei',
@@ -265,7 +287,7 @@ def configure_matplotlib_chinese_font():
         'Arial Unicode MS',
     ]
     installed_fonts = {font.name for font in font_manager.fontManager.ttflist}
-    available_fonts = [font for font in candidates if font in installed_fonts]
+    available_fonts = loaded_fonts + [font for font in font_name_candidates if font in installed_fonts]
     return available_fonts + ['DejaVu Sans']
 
 
@@ -3465,8 +3487,32 @@ def generate_3d_strategy_comparison_chart(all_data, stock_code, strategy_names):
     
     return fig
 
+def require_access_password():
+    """Gate the app with a lightweight shared password."""
+    if st.session_state.get("access_granted"):
+        return True
+
+    expected_password = str(get_deploy_secret("APP_ACCESS_PASSWORD", "114514"))
+    st.markdown("## 77AIpha 访问验证")
+    st.caption("请输入访问密码后继续使用工作台。")
+    with st.form("access_password_form"):
+        password = st.text_input("访问密码", type="password")
+        submitted = st.form_submit_button("进入工作台")
+
+    if submitted:
+        if password == expected_password:
+            st.session_state["access_granted"] = True
+            st.rerun()
+        else:
+            st.error("访问密码不正确。")
+
+    return False
+
 # 主函数
 def main():
+    if not require_access_password():
+        return
+
     st.markdown(
         f"""<section class="lux-alpha-hero">
 <div class="lux-alpha-hero-brand">{HERO_ALPHA_BADGE_HTML}</div>
