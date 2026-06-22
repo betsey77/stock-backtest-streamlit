@@ -2,6 +2,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as font_manager
 import plotly.graph_objects as go
 ef = None  # efinance is disabled on Streamlit Cloud because it writes inside site-packages.
 import yfinance as yf
@@ -251,8 +252,26 @@ def get_tickflow_client():
     st.session_state["_tickflow_client"] = client
     return client
 
+def configure_matplotlib_chinese_font():
+    """Pick an installed CJK font so generated PNG charts keep Chinese labels."""
+    candidates = [
+        'Noto Sans CJK SC',
+        'Noto Sans CJK JP',
+        'Noto Sans CJK TC',
+        'Source Han Sans SC',
+        'Microsoft YaHei',
+        'SimHei',
+        'PingFang SC',
+        'Arial Unicode MS',
+    ]
+    installed_fonts = {font.name for font in font_manager.fontManager.ttflist}
+    available_fonts = [font for font in candidates if font in installed_fonts]
+    return available_fonts + ['DejaVu Sans']
+
+
 # Matplotlib 简约白色风格设置
-plt.rcParams['font.sans-serif'] = ['PingFang SC', 'Microsoft YaHei', 'SimHei']
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = configure_matplotlib_chinese_font()
 plt.rcParams['axes.unicode_minus'] = False
 plt.rcParams['figure.facecolor'] = '#F3F4F6'
 plt.rcParams['axes.facecolor'] = '#FFFFFF'
